@@ -14,7 +14,8 @@ This folder (v1/) is the working area for building a LangGraph-based extraction 
 - Prompt version format: versioned .yaml prompt specs (not .txt).
   - Example reference: v1/agent-discover-prompt-v1.0.yaml.
 - Single output model: everything is a Rule.
-  - We expand rule_type to cover rules / controls / risks (taxonomy expansion).
+  - We use a required `category` field: `rule | control | risk`.
+  - `rule_type` remains a closed enum for sub-types.
 
 ## Source Document (FDIC 370 Library)
 - Location in repo: v1/data/

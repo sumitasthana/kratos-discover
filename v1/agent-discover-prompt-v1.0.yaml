@@ -31,7 +31,7 @@ role: |
   - Confidence must reflect grounding quality, never exceed 0.99.
 
 # ---------------------------------------------------------------------------
-# 2. RULE TYPES — Closed Enum (only these 6 are valid)
+# 2. RULE TYPES — Closed Enum (only these values are valid)
 # ---------------------------------------------------------------------------
 rule_types:
 
@@ -210,6 +210,61 @@ rule_types:
           output files within 24 hours of the FDIC's appointment as receiver.
         confidence: 0.98
 
+  control_requirement:
+    description: >
+      A discrete control that must exist, be performed, or be maintained to
+      ensure compliance (e.g., monitoring, governance, periodic testing).
+    required_attributes:
+      - control_objective
+      - control_activity
+    optional_attributes:
+      - frequency
+      - owner
+      - evidence
+    example:
+      input: >
+        The institution must conduct quarterly reconciliations of deposit
+        account participant data and retain evidence of completion.
+      output:
+        rule_type: control_requirement
+        category: control
+        rule_description: "Quarterly reconciliation control required for deposit account participant data"
+        attributes:
+          control_objective: "Detect and correct participant data discrepancies"
+          control_activity: "Conduct quarterly reconciliations of deposit account participant data"
+          frequency: "Quarterly"
+          evidence: "Retained evidence of completion"
+        grounded_in: >
+          The institution must conduct quarterly reconciliations of deposit
+          account participant data and retain evidence of completion.
+        confidence: 0.95
+
+  risk_statement:
+    description: >
+      A specific compliance/operational risk explicitly stated in the source
+      text, including the triggering condition and the impact/consequence.
+    required_attributes:
+      - risk_condition
+      - risk_impact
+    optional_attributes:
+      - affected_process
+      - mitigation_reference
+    example:
+      input: >
+        Incomplete beneficiary data may result in delayed insurance
+        determinations and increased depositor harm.
+      output:
+        rule_type: risk_statement
+        category: risk
+        rule_description: "Incomplete beneficiary data can delay insurance determinations and harm depositors"
+        attributes:
+          risk_condition: "Beneficiary data is incomplete"
+          risk_impact: "Delayed insurance determinations and increased depositor harm"
+        grounded_in: >
+          Incomplete beneficiary data may result in delayed insurance
+          determinations and increased depositor harm.
+        confidence: 0.90
+
 # ---------------------------------------------------------------------------
 # 3. OUTPUT SCHEMA — Fixed JSON structure (keys never change)
 # ---------------------------------------------------------------------------
@@ -219,7 +274,8 @@ output_schema:
     Each element must have EXACTLY these keys. No extra keys allowed.
   structure:
     rule_id: "string — R-{CATEGORY_CODE}-{SEQUENTIAL_NUMBER}"
-    rule_type: "string — one of the 6 enum values above"
+    category: "string — one of: rule | control | risk"
+    rule_type: "string — one of the enum values above"
     rule_description: "string — clear, concise, actionable statement of the rule"
     grounded_in: "string — exact or near-exact quote from the source text"
     confidence: "float — 0.50 to 0.99"
@@ -235,6 +291,8 @@ output_schema:
     documentation_requirement: DOC
     update_requirement: UPD
     update_timeline: TL
+    control_requirement: CTRL
+    risk_statement: RSK
 
   confidence_calibration:
     0.95_to_0.99: "Rule is verbatim or near-verbatim from source; numeric threshold explicitly stated"
@@ -253,15 +311,16 @@ instructions: |
   requirement, condition, or deadline.
 
   STEP 2 — For each candidate rule:
-    a. Determine the rule_type from the 6-type enum. If it does not fit any
+    a. Set category to one of: rule | control | risk.
+    b. Determine the rule_type from the enum above. If it does not fit any
        type, SKIP it — do not force-fit.
-    b. Write a clear rule_description that is specific and actionable.
-    c. Extract all required_attributes for the rule_type. If a required
+    c. Write a clear rule_description that is specific and actionable.
+    d. Extract all required_attributes for the rule_type. If a required
        attribute is missing from the source text, SKIP the entire rule.
-    d. Extract optional_attributes only if explicitly stated.
-    e. Copy the grounded_in text — use the exact source passage.
-    f. Assign confidence per the calibration table.
-    g. Generate a rule_id using the category code and a sequential number
+    e. Extract optional_attributes only if explicitly stated.
+    f. Copy the grounded_in text — use the exact source passage.
+    g. Assign confidence per the calibration table.
+    h. Generate a rule_id using the category code and a sequential number
        starting from 001 within this extraction batch.
 
   STEP 3 — Review for quality:
