@@ -56,10 +56,22 @@ From the repo root:
 python rule-agent/cli.py --provider openai --input rule-agent/data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
 ```
 
+From inside the `rule-agent/` folder:
+
+```bash
+python cli.py --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
+```
+
 Use Anthropic:
 
 ```bash
 python rule-agent/cli.py --provider anthropic --input rule-agent/data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
+```
+
+From inside the `rule-agent/` folder:
+
+```bash
+python cli.py --provider anthropic --input data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
 ```
 
 Override the active prompt version:
