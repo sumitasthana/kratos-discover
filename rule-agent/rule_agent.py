@@ -50,6 +50,10 @@ class Rule(BaseModel):
     metadata: RuleMetadata
 
 
+class RulesResponse(BaseModel):
+    rules: List[Rule]
+
+
 @dataclass(frozen=True)
 class DocumentSection:
     header: str
@@ -179,9 +183,7 @@ class RuleAgent:
                 block_content=section.content,
             )
 
-            response_text = self._call_llm_json(system_prompt=system_prompt, user_message=user_message)
-            payload = self._safe_json_load(response_text)
-            rules = payload.get("rules", []) if isinstance(payload, dict) else []
+            rules = self._call_llm_rules(system_prompt=system_prompt, user_message=user_message)
 
             if not isinstance(rules, list):
                 logger.warning("LLM returned non-list rules; skipping section %s", section.source_location)
@@ -198,6 +200,38 @@ class RuleAgent:
 
         state["raw_rules"] = raw_rules
         return state
+
+    def _call_llm_rules(self, system_prompt: str, user_message: str) -> List[Dict[str, Any]]:
+        structured = self._call_llm_structured(system_prompt=system_prompt, user_message=user_message)
+        if structured is not None:
+            return [r.model_dump() for r in structured.rules]
+
+        response_text = self._call_llm_json(system_prompt=system_prompt, user_message=user_message)
+        payload = self._safe_json_load(response_text)
+        rules = payload.get("rules", []) if isinstance(payload, dict) else []
+        return rules if isinstance(rules, list) else []
+
+    def _call_llm_structured(self, system_prompt: str, user_message: str) -> Optional[RulesResponse]:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+        try:
+            if not hasattr(self.llm, "with_structured_output"):
+                return None
+
+            structured_llm = self.llm.with_structured_output(RulesResponse)
+            resp = structured_llm.invoke(messages)
+
+            if isinstance(resp, RulesResponse):
+                return resp
+            if isinstance(resp, dict):
+                return RulesResponse.model_validate(resp)
+            return None
+        except Exception:
+            logger.info("Structured output call failed; falling back to JSON parsing", exc_info=True)
+            return None
 
     def _render_user_message(self, template: str, block_header: str, block_content: str) -> str:
         rendered = template

@@ -4,7 +4,7 @@ Production-grade Rule Agent built with LangGraph.
 
 ## What it does
 - Segments the FDIC 370 source document into extractable sections.
-- Extracts Rules (including controls and risks) using Claude + JSON output.
+- Extracts Rules (including controls and risks) using an LLM with schema-based structured output when supported (falls back to JSON parsing).
 - Validates, deduplicates, and enforces strict grounding against the FDIC source.
 
 ## Data source
@@ -27,16 +27,18 @@ import os
 from pathlib import Path
 
 from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 
 from rule_agent import RuleAgent
 from prompt_registry import PromptRegistry
 
 registry = PromptRegistry(base_dir=Path("rule-agent"))
-llm = ChatAnthropic(
-    model=os.getenv("CLAUDE_MODEL", "claude-opus-4-20250805"),
-    max_tokens=3000,
-    temperature=0,
-)
+
+# Option A: Anthropic
+llm = ChatAnthropic(model=os.getenv("CLAUDE_MODEL", "claude-opus-4-20250805"), max_tokens=3000, temperature=0)
+
+# Option B: OpenAI
+# llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"), temperature=0)
 
 agent = RuleAgent(
     registry=registry,
