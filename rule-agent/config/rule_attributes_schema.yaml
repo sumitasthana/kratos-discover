@@ -1,0 +1,65 @@
+data_quality_threshold:
+  required:
+    - metric
+    - threshold_value
+    - threshold_direction
+  optional:
+    - threshold_unit
+    - consequence
+
+ownership_category:
+  required:
+    - ownership_type
+    - required_data_elements
+  optional:
+    - insurance_coverage
+    - cardinality
+
+beneficial_ownership_threshold:
+  required:
+    - threshold_value
+    - threshold_unit
+  optional:
+    - applies_to
+    - requirement
+    - threshold_direction
+
+documentation_requirement:
+  required:
+    - applies_to
+    - requirement
+  optional:
+    - consequence
+
+update_requirement:
+  required:
+    - applies_when
+    - requirement
+  optional:
+    - applies_to
+    - consequence
+
+update_timeline:
+  required:
+    - applies_to
+    - threshold_value
+    - threshold_unit
+  optional:
+    - consequence
+
+control_requirement:
+  required:
+    - control_objective
+    - control_activity
+  optional:
+    - frequency
+    - owner
+    - evidence
+
+risk_statement:
+  required:
+    - risk_condition
+    - risk_impact
+  optional:
+    - affected_process
+    - mitigation_reference

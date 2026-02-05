@@ -20,8 +20,16 @@ env/
 
 .env
 .env.*
+!.env.example
+!**/.env.example
 
 .idea/
 .vscode/
 
 *.log
+
+rule-agent/data/
+rule-agent/data/**/*.docx
+rule-agent/data/**/*.pdf
+rule-agent/data/**/*.html
+rule-agent/data/**/*.htm
