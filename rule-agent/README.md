@@ -49,6 +49,25 @@ rules = agent.extract_rules(document_path=os.getenv("FDIC_370_PATH"))
 print(len(rules))
 ```
 
+## Running (CLI)
+From the repo root:
+
+```bash
+python rule-agent/cli.py --provider openai --input rule-agent/data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
+```
+
+Use Anthropic:
+
+```bash
+python rule-agent/cli.py --provider anthropic --input rule-agent/data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
+```
+
+Override the active prompt version:
+
+```bash
+python rule-agent/cli.py --provider openai --prompt-version v1.0 --output out.json
+```
+
 ## Prompt versioning
 - Versioned prompt specs live at `rule-agent/prompts/rule_extraction/vX.Y.yaml`.
 - Active version is controlled by `rule-agent/prompts/registry.yaml`.
