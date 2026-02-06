@@ -4,19 +4,19 @@ rule_extraction:
     v1.0:
       created_at: '2026-02-05T00:00:00Z'
       created_by: ''
-      file_path: rule-agent/prompts/rule_extraction/v1.0.yaml
+      file_path: prompts/rule_extraction/v1.0.yaml
     v1.1:
       created_at: '2026-02-05T00:00:00Z'
       created_by: ''
-      file_path: rule-agent/prompts/rule_extraction/v1.1.yaml
+      file_path: prompts/rule_extraction/v1.1.yaml
     v1.2:
       created_at: '2026-02-05T00:00:00Z'
       created_by: ''
-      file_path: rule-agent/prompts/rule_extraction/v1.2.yaml
+      file_path: prompts/rule_extraction/v1.2.yaml
 grc_component_extraction:
   active: v1.2
   versions:
     v1.2:
       created_at: '2026-02-05T00:00:00Z'
       created_by: ''
-      file_path: rule-agent/prompts/rule_extraction/v1.2.yaml
+      file_path: prompts/rule_extraction/v1.2.yaml
