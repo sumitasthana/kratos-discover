@@ -33,3 +33,5 @@ rule-agent/data/**/*.docx
 rule-agent/data/**/*.pdf
 rule-agent/data/**/*.html
 rule-agent/data/**/*.htm
+
+rule-agent/outputs/
