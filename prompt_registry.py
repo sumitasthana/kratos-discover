@@ -96,7 +96,7 @@ class PromptRegistry:
         prompt_dir = self._prompts_dir / prompt_name
         prompt_dir.mkdir(parents=True, exist_ok=True)
 
-        file_path = f"rule-agent/prompts/{prompt_name}/{version}.yaml"
+        file_path = f"prompts/{prompt_name}/{version}.yaml"
         spec_path = self._resolve_path(file_path)
         spec_path.parent.mkdir(parents=True, exist_ok=True)
         self._write_yaml(spec_path, spec)
@@ -151,8 +151,7 @@ class PromptRegistry:
         if p.is_absolute():
             return p
 
-        repo_root = self._base_dir.parent
-        return (repo_root / p).resolve()
+        return (self._base_dir / p).resolve()
 
     def _load_yaml(self, path: Path) -> Dict[str, Any]:
         with path.open("r", encoding="utf-8") as f:

@@ -1,4 +1,4 @@
-# rule-agent
+# kratos-discover
 
 Production-grade Rule Agent built with LangGraph.
 
@@ -9,17 +9,17 @@ Production-grade Rule Agent built with LangGraph.
 
 ## Data source
 Place the FDIC source file here (gitignored):
-- `rule-agent/data/FDIC_370_GRC_Library_National_Bank.docx`
+- `data/FDIC_370_GRC_Library_National_Bank.docx`
 
 ## Setup
 ```bash
 python -m venv .venv
 .venv\\Scripts\\activate
-pip install -r rule-agent/requirements.txt
+pip install -r requirements.txt
 ```
 
 Create env file:
-- Copy `rule-agent/config/.env.example` to `.env` (repo root) or set env vars in your shell.
+- Copy `config/.env.example` to `.env` (repo root) or set env vars in your shell.
 
 ## Running (example)
 ```python
@@ -32,7 +32,7 @@ from langchain_openai import ChatOpenAI
 from rule_agent import RuleAgent
 from prompt_registry import PromptRegistry
 
-registry = PromptRegistry(base_dir=Path("rule-agent"))
+registry = PromptRegistry(base_dir=Path("."))
 
 # Option A: Anthropic
 llm = ChatAnthropic(model=os.getenv("CLAUDE_MODEL", "claude-opus-4-20250805"), max_tokens=3000, temperature=0)
@@ -53,22 +53,10 @@ print(len(rules))
 From the repo root:
 
 ```bash
-python rule-agent/cli.py --provider openai --input rule-agent/data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
-```
-
-From inside the `rule-agent/` folder:
-
-```bash
 python cli.py --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
 ```
 
 Use Anthropic:
-
-```bash
-python rule-agent/cli.py --provider anthropic --input rule-agent/data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
-```
-
-From inside the `rule-agent/` folder:
 
 ```bash
 python cli.py --provider anthropic --input data/FDIC_370_GRC_Library_National_Bank.docx --output out.json
@@ -77,12 +65,12 @@ python cli.py --provider anthropic --input data/FDIC_370_GRC_Library_National_Ba
 Override the active prompt version:
 
 ```bash
-python rule-agent/cli.py --provider openai --prompt-version v1.0 --output out.json
+python cli.py --provider openai --prompt-version v1.0 --output out.json
 ```
 
 ## Prompt versioning
-- Versioned prompt specs live at `rule-agent/prompts/rule_extraction/vX.Y.yaml`.
-- Active version is controlled by `rule-agent/prompts/registry.yaml`.
+- Versioned prompt specs live at `prompts/rule_extraction/vX.Y.yaml`.
+- Active version is controlled by `prompts/registry.yaml`.
 
 ## Strict grounding
 The final grounding node drops any extracted item that cannot be verified against the source section text.

@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--input",
         dest="input_path",
-        default=os.getenv("FDIC_370_PATH", "rule-agent/data/FDIC_370_GRC_Library_National_Bank.docx"),
+        default=os.getenv("FDIC_370_PATH", "data/FDIC_370_GRC_Library_National_Bank.docx"),
         help="Path to FDIC document (.docx/.pdf/.html)",
     )
     parser.add_argument(

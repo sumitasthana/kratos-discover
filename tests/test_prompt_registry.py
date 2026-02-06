@@ -23,8 +23,7 @@ def test_list_versions() -> None:
 
 def test_set_active_version_roundtrip(tmp_path: Path) -> None:
     # Copy prompts folder into a temp base_dir to avoid mutating repo.
-    base_dir = tmp_path / "rule-agent"
-    base_dir.mkdir(parents=True, exist_ok=True)
+    base_dir = tmp_path
 
     src_prompts = Path(__file__).resolve().parents[1] / "prompts"
     dst_prompts = base_dir / "prompts"
