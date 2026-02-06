@@ -54,6 +54,49 @@ class RulesResponse(BaseModel):
     rules: List[Rule]
 
 
+class GRCComponentMetadata(BaseModel):
+    source_block: str
+    source_location: str
+
+
+class PolicyComponent(BaseModel):
+    component_type: str = Field(default="policy")
+    component_id: Optional[str] = None
+    component_title: Optional[str] = None
+    component_owner: Optional[str] = None
+    policy_objective: Optional[str] = None
+    source_table_identifier: Optional[str] = None
+    validation_errors: List[str] = Field(default_factory=list)
+    metadata: GRCComponentMetadata
+
+
+class RiskComponent(BaseModel):
+    component_type: str = Field(default="risk")
+    component_id: Optional[str] = None
+    risk_description: Optional[str] = None
+    risk_owner: Optional[str] = None
+    source_table_identifier: Optional[str] = None
+    validation_errors: List[str] = Field(default_factory=list)
+    metadata: GRCComponentMetadata
+
+
+class ControlComponent(BaseModel):
+    component_type: str = Field(default="control")
+    component_id: Optional[str] = None
+    control_description: Optional[str] = None
+    control_owner: Optional[str] = None
+    source_table_identifier: Optional[str] = None
+    validation_errors: List[str] = Field(default_factory=list)
+    metadata: GRCComponentMetadata
+
+
+class GRCComponentsResponse(BaseModel):
+    policies: List[PolicyComponent] = Field(default_factory=list)
+    risks: List[RiskComponent] = Field(default_factory=list)
+    controls: List[ControlComponent] = Field(default_factory=list)
+    extraction_summary: Dict[str, Any] = Field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class DocumentSection:
     header: str
@@ -69,6 +112,10 @@ class AgentState(TypedDict, total=False):
     validated_rules: List[Dict[str, Any]]
     deduplicated_rules: List[Dict[str, Any]]
     final_rules: List[Rule]
+
+    raw_components: Dict[str, Any]
+    validated_components: Dict[str, Any]
+    final_components: Dict[str, Any]
 
 
 class RuleAgent:
@@ -117,6 +164,26 @@ class RuleAgent:
 
         result = self.graph.invoke(state)
         return list(result.get("final_rules", []))
+
+    def extract_grc_components(
+        self,
+        document_text: Optional[str] = None,
+        document_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if not document_text and not document_path:
+            raise ValueError("Provide document_text or document_path")
+
+        state: AgentState = {}
+        if document_text:
+            state["document_text"] = document_text
+        if document_path:
+            state["document_path"] = document_path
+
+        state = self._segment_requirements_node(state)
+        state = self._extract_grc_components_node(state)
+        state = self._validate_grc_components_node(state)
+        state = self._ground_grc_components_node(state)
+        return dict(state.get("final_components", {}))
 
     def _segment_requirements_node(self, state: AgentState) -> AgentState:
         if "document_path" in state and state["document_path"]:
@@ -193,9 +260,11 @@ class RuleAgent:
                 if not isinstance(r, dict):
                     continue
                 r.setdefault("metadata", {})
-                r["metadata"].setdefault("source_location", section.source_location)
-                if not r["metadata"].get("source_block"):
-                    r["metadata"]["source_block"] = section.content[:2000]
+                # Authoritative source location for downstream grounding.
+                r["metadata"]["source_location"] = section.source_location
+                # Ensure strict grounding uses the authoritative section content rather than
+                # any paraphrase the model might return.
+                r["metadata"]["source_block"] = section.content
                 raw_rules.append(r)
 
         state["raw_rules"] = raw_rules
@@ -221,7 +290,10 @@ class RuleAgent:
             if not hasattr(self.llm, "with_structured_output"):
                 return None
 
-            structured_llm = self.llm.with_structured_output(RulesResponse)
+            try:
+                structured_llm = self.llm.with_structured_output(RulesResponse, method="function_calling")
+            except TypeError:
+                structured_llm = self.llm.with_structured_output(RulesResponse)
             resp = structured_llm.invoke(messages)
 
             if isinstance(resp, RulesResponse):
@@ -231,6 +303,44 @@ class RuleAgent:
             return None
         except Exception:
             logger.info("Structured output call failed; falling back to JSON parsing", exc_info=True)
+            return None
+
+    def _call_llm_grc_components(self, system_prompt: str, user_message: str) -> Dict[str, Any]:
+        structured = self._call_llm_grc_structured(system_prompt=system_prompt, user_message=user_message)
+        if structured is not None:
+            return structured.model_dump()
+
+        response_text = self._call_llm_json(system_prompt=system_prompt, user_message=user_message)
+        payload = self._safe_json_load(response_text)
+        return payload if isinstance(payload, dict) else {}
+
+    def _call_llm_grc_structured(
+        self, system_prompt: str, user_message: str
+    ) -> Optional[GRCComponentsResponse]:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+        try:
+            if not hasattr(self.llm, "with_structured_output"):
+                return None
+
+            try:
+                structured_llm = self.llm.with_structured_output(
+                    GRCComponentsResponse, method="function_calling"
+                )
+            except TypeError:
+                structured_llm = self.llm.with_structured_output(GRCComponentsResponse)
+
+            resp = structured_llm.invoke(messages)
+            if isinstance(resp, GRCComponentsResponse):
+                return resp
+            if isinstance(resp, dict):
+                return GRCComponentsResponse.model_validate(resp)
+            return None
+        except Exception:
+            logger.debug("Structured output call failed; falling back to JSON parsing", exc_info=True)
             return None
 
     def _render_user_message(self, template: str, block_header: str, block_content: str) -> str:
@@ -251,6 +361,125 @@ class RuleAgent:
                 logger.info("Dropping invalid rule #%s: %s", idx, e)
 
         state["validated_rules"] = validated
+        return state
+
+    def _extract_grc_components_node(self, state: AgentState) -> AgentState:
+        if self.llm is None:
+            raise RuntimeError("LLM is not configured. Pass llm=... to RuleAgent.")
+
+        sections = state.get("sections", [])
+        prompt_version = self.registry.get_active_prompt("grc_component_extraction")
+        system_prompt = prompt_version["content"]
+        spec = prompt_version.get("spec", {})
+        user_template = str(spec.get("user_message_template", "{block_header}\n{block_content}"))
+
+        aggregated: Dict[str, Any] = {
+            "policies": [],
+            "risks": [],
+            "controls": [],
+            "extraction_summary": {},
+        }
+
+        for section in sections:
+            user_message = self._render_user_message(
+                template=user_template,
+                block_header=section.header,
+                block_content=section.content,
+            )
+
+            payload = self._call_llm_grc_components(system_prompt=system_prompt, user_message=user_message)
+            if not isinstance(payload, dict):
+                continue
+
+            for key in ("policies", "risks", "controls"):
+                items = payload.get(key, [])
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    item.setdefault("metadata", {})
+                    item["metadata"]["source_location"] = section.source_location
+                    item["metadata"]["source_block"] = section.content
+                    aggregated[key].append(item)
+
+        state["raw_components"] = aggregated
+        return state
+
+    def _validate_grc_components_node(self, state: AgentState) -> AgentState:
+        raw = state.get("raw_components", {})
+        validated: Dict[str, Any] = {
+            "policies": [],
+            "risks": [],
+            "controls": [],
+            "extraction_summary": dict(raw.get("extraction_summary", {})) if isinstance(raw, dict) else {},
+        }
+
+        def _flag_missing_required(model: BaseModel, required_fields: List[str]) -> None:
+            existing = getattr(model, "validation_errors", [])
+            if not isinstance(existing, list):
+                existing = []
+
+            errors = list(existing)
+            for field in required_fields:
+                val = getattr(model, field, None)
+                if val is None or (isinstance(val, str) and not val.strip()):
+                    errors.append(f"missing_required_field: {field}")
+
+            setattr(model, "validation_errors", errors)
+
+        for p in list(raw.get("policies", [])) if isinstance(raw, dict) else []:
+            if not isinstance(p, dict):
+                continue
+            try:
+                model = PolicyComponent.model_validate(p)
+                _flag_missing_required(
+                    model,
+                    required_fields=["component_id", "component_title", "component_owner", "policy_objective"],
+                )
+                validated["policies"].append(model)
+            except ValidationError as e:
+                logger.info("Dropping invalid policy component: %s", e)
+
+        for r in list(raw.get("risks", [])) if isinstance(raw, dict) else []:
+            if not isinstance(r, dict):
+                continue
+            try:
+                model = RiskComponent.model_validate(r)
+                _flag_missing_required(model, required_fields=["component_id", "risk_description", "risk_owner"])
+                validated["risks"].append(model)
+            except ValidationError as e:
+                logger.info("Dropping invalid risk component: %s", e)
+
+        for c in list(raw.get("controls", [])) if isinstance(raw, dict) else []:
+            if not isinstance(c, dict):
+                continue
+            try:
+                model = ControlComponent.model_validate(c)
+                _flag_missing_required(
+                    model,
+                    required_fields=["component_id", "control_description", "control_owner"],
+                )
+                validated["controls"].append(model)
+            except ValidationError as e:
+                logger.info("Dropping invalid control component: %s", e)
+
+        state["validated_components"] = validated
+        return state
+
+    def _ground_grc_components_node(self, state: AgentState) -> AgentState:
+        # For v1.2 components, we keep strict traceability by attaching authoritative
+        # section source_block/source_location at extraction time. We do not
+        # aggressively drop components here because table extraction often yields
+        # terse identifiers.
+        validated = state.get("validated_components", {})
+        final_components: Dict[str, Any] = {
+            "policies": list(validated.get("policies", [])),
+            "risks": list(validated.get("risks", [])),
+            "controls": list(validated.get("controls", [])),
+            "extraction_summary": dict(validated.get("extraction_summary", {})),
+        }
+        state["final_components"] = final_components
         return state
 
     def _deduplication_node(self, state: AgentState) -> AgentState:
@@ -300,13 +529,24 @@ class RuleAgent:
         if not grounded_in or not source_block:
             return False
 
-        if grounded_in not in section.content:
-            return False
+        section_content = section.content
+        if grounded_in not in section_content:
+            grounded_norm = self._normalize_ws(grounded_in)
+            section_norm = self._normalize_ws(section_content)
+            if grounded_norm not in section_norm:
+                return False
 
-        if grounded_in not in source_block and source_block not in section.content:
-            return False
+        # source_block should be the full section content (authoritative). Keep a defensive check.
+        if source_block and source_block not in section_content:
+            source_norm = self._normalize_ws(source_block)
+            section_norm = self._normalize_ws(section_content)
+            if source_norm not in section_norm:
+                return False
 
         return True
+
+    def _normalize_ws(self, text: str) -> str:
+        return re.sub(r"\s+", " ", text).strip()
 
     def _dedupe_key(self, r: Dict[str, Any]) -> str:
         desc = str(r.get("rule_description", "")).strip().lower()

@@ -97,6 +97,65 @@ def test_strict_grounding_drops_ungrounded() -> None:
     assert rules == []
 
 
+def test_agent_smoke_extract_grc_components_from_text() -> None:
+    registry = PromptRegistry(base_dir=Path(__file__).resolve().parents[1])
+
+    llm = FakeLLM(
+        payloads=[
+            {
+                "policies": [
+                    {
+                        "component_type": "policy",
+                        "component_id": "P-001",
+                        "component_title": "Data Quality and Accuracy Standards",
+                        "component_owner": "Chief Compliance Officer",
+                        "policy_objective": "Establish enterprise-wide data quality standards",
+                        "source_table_identifier": "Table:1",
+                        "validation_errors": [],
+                        "metadata": {"source_block": "x", "source_location": "lines:1-1"},
+                    }
+                ],
+                "risks": [
+                    {
+                        "component_type": "risk",
+                        "component_id": "R-001",
+                        "risk_description": "Inaccurate data may lead to noncompliance.",
+                        "risk_owner": "Chief Operations Officer",
+                        "source_table_identifier": "Table:2",
+                        "validation_errors": [],
+                        "metadata": {"source_block": "y", "source_location": "lines:1-1"},
+                    }
+                ],
+                "controls": [
+                    {
+                        "component_type": "control",
+                        "component_id": "C-001",
+                        "control_description": "Validate data accuracy on ingest.",
+                        "control_owner": "Data Governance Lead",
+                        "source_table_identifier": "Table:3",
+                        "validation_errors": [],
+                        "metadata": {"source_block": "z", "source_location": "lines:1-1"},
+                    }
+                ],
+                "extraction_summary": {"notes": "ok"},
+            }
+        ]
+    )
+
+    agent = RuleAgent(registry=registry, llm=llm)
+    doc = "Row 0: Policy ID | P-001\nRow 1: Policy Title | Data Quality and Accuracy Standards"
+    components = agent.extract_grc_components(document_text=doc)
+
+    assert "policies" in components
+    assert "risks" in components
+    assert "controls" in components
+    assert len(components["policies"]) == 1
+    assert len(components["risks"]) == 1
+    assert len(components["controls"]) == 1
+    assert components["policies"][0].component_id == "P-001"
+    assert components["controls"][0].component_id == "C-001"
+
+
 @pytest.mark.skipif(True, reason="Requires local FDIC doc file")
 def test_agent_with_fdic_docx_path() -> None:
     registry = PromptRegistry(base_dir=Path(__file__).resolve().parents[1])
