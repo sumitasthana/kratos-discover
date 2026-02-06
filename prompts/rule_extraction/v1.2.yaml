@@ -556,13 +556,21 @@ user_message_template: |
   
   ## Instructions:
   
-  1. Identify tables containing Policy, Risk, or Control data
-  2. Extract key-value pairs from each table
-  3. Build structured component objects per the schema
-  4. Parse lists, dates, enums, and nested structures
-  5. Validate cross-references between components
-  6. Calculate quality metrics
-  7. Return JSON with three arrays: policies, risks, controls
+  1. The input section may be a JSON object representing a single DOCX table. If so, it will include:
+     - content_type: "docx_table"
+     - table_index: int
+     - header: str
+     - rows: [{"field": str, "value": str, "cells": [str, ...]}, ...]
+  2. If the input is JSON with rows[], treat rows[] as the authoritative key/value source for this table.
+     - Do NOT infer values not present in rows[]
+     - Prefer row.field labels exactly as given
+  3. Extract key-value pairs from each table
+  4. Build structured component objects per the schema
+  5. Parse lists, dates, enums, and nested structures
+  6. Validate cross-references between components
+  7. Calculate quality metrics
+  8. Return JSON with three arrays: policies, risks, controls
+  9. Include helper metadata fields when available (e.g., table_index, header, raw_rows) either inside metadata or as extra fields.
   
   ## Output Format:
   

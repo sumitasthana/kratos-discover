@@ -111,6 +111,8 @@ def test_agent_smoke_extract_grc_components_from_text() -> None:
                         "component_owner": "Chief Compliance Officer",
                         "policy_objective": "Establish enterprise-wide data quality standards",
                         "source_table_identifier": "Table:1",
+                        "effective_date": "January 30, 2026",
+                        "related_controls": "C-001, C-999",
                         "validation_errors": [],
                         "metadata": {"source_block": "x", "source_location": "lines:1-1"},
                     }
@@ -122,6 +124,8 @@ def test_agent_smoke_extract_grc_components_from_text() -> None:
                         "risk_description": "Inaccurate data may lead to noncompliance.",
                         "risk_owner": "Chief Operations Officer",
                         "source_table_identifier": "Table:2",
+                        "effective_date": "Sometime in Q1 2026",
+                        "mitigation_controls": ["C-001", "C-999"],
                         "validation_errors": [],
                         "metadata": {"source_block": "y", "source_location": "lines:1-1"},
                     }
@@ -133,6 +137,8 @@ def test_agent_smoke_extract_grc_components_from_text() -> None:
                         "control_description": "Validate data accuracy on ingest.",
                         "control_owner": "Data Governance Lead",
                         "source_table_identifier": "Table:3",
+                        "control_type": {"nature": "Preventive", "automation": "Automated"},
+                        "evidence": "System logs, Screenshots",
                         "validation_errors": [],
                         "metadata": {"source_block": "z", "source_location": "lines:1-1"},
                     }
@@ -154,6 +160,22 @@ def test_agent_smoke_extract_grc_components_from_text() -> None:
     assert len(components["controls"]) == 1
     assert components["policies"][0].component_id == "P-001"
     assert components["controls"][0].component_id == "C-001"
+
+    # Normalization checks
+    assert components["policies"][0].effective_date == "2026-01-30"
+    assert components["controls"][0].control_type == "Preventive / Automated"
+    assert components["controls"][0].evidence == ["System logs", "Screenshots"]
+
+    # Cross-reference + date parsing error flags should be present
+    pol_errs = components["policies"][0].validation_errors
+    risk_errs = components["risks"][0].validation_errors
+    assert any("missing_reference" in e for e in pol_errs)
+    assert any("missing_reference" in e for e in risk_errs)
+    assert any("date_unparseable" in e for e in risk_errs)
+
+    summary = components.get("extraction_summary", {})
+    assert "validation_errors" in summary
+    assert "warnings" in summary
 
 
 @pytest.mark.skipif(True, reason="Requires local FDIC doc file")

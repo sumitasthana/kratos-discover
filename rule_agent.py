@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
 
 from pydantic import BaseModel, Field, ValidationError
+from pydantic.config import ConfigDict
 
 from langgraph.graph import END, StateGraph
 
@@ -55,36 +57,69 @@ class RulesResponse(BaseModel):
 
 
 class GRCComponentMetadata(BaseModel):
+    model_config = ConfigDict(extra="allow")
     source_block: str
     source_location: str
 
 
 class PolicyComponent(BaseModel):
+    model_config = ConfigDict(extra="allow")
     component_type: str = Field(default="policy")
     component_id: Optional[str] = None
     component_title: Optional[str] = None
     component_owner: Optional[str] = None
     policy_objective: Optional[str] = None
+    approval_authority: Optional[str] = None
+    effective_date: Optional[str] = None
+    review_cycle: Optional[str] = None
+    policy_statement: Optional[str] = None
+    scope: Optional[str] = None
+    detailed_requirements: Optional[str] = None
+    roles_responsibilities: Optional[str] = None
+    related_regulations: Any = None
+    grc_platform_module: Optional[str] = None
+    related_controls: Any = None
+    related_risks: Any = None
     source_table_identifier: Optional[str] = None
     validation_errors: List[str] = Field(default_factory=list)
     metadata: GRCComponentMetadata
 
 
 class RiskComponent(BaseModel):
+    model_config = ConfigDict(extra="allow")
     component_type: str = Field(default="risk")
     component_id: Optional[str] = None
     risk_description: Optional[str] = None
     risk_owner: Optional[str] = None
+    risk_category: Optional[str] = None
+    inherent_risk_rating: Optional[str] = None
+    residual_risk_rating: Optional[str] = None
+    effective_date: Optional[str] = None
+    review_cycle: Optional[str] = None
+    grc_platform_module: Optional[str] = None
+    related_policies: Any = None
+    mitigation_controls: Any = None
+    related_controls: Any = None
     source_table_identifier: Optional[str] = None
     validation_errors: List[str] = Field(default_factory=list)
     metadata: GRCComponentMetadata
 
 
 class ControlComponent(BaseModel):
+    model_config = ConfigDict(extra="allow")
     component_type: str = Field(default="control")
     component_id: Optional[str] = None
     control_description: Optional[str] = None
     control_owner: Optional[str] = None
+    control_type: Any = None
+    operating_frequency: Optional[str] = None
+    testing_frequency: Optional[str] = None
+    evidence: Any = None
+    effective_date: Optional[str] = None
+    review_cycle: Optional[str] = None
+    grc_platform_module: Optional[str] = None
+    related_policies: Any = None
+    related_risks: Any = None
     source_table_identifier: Optional[str] = None
     validation_errors: List[str] = Field(default_factory=list)
     metadata: GRCComponentMetadata
@@ -244,6 +279,8 @@ class RuleAgent:
         raw_rules: List[Dict[str, Any]] = []
 
         for section in sections:
+            if ":table" in section.source_location:
+                continue
             user_message = self._render_user_message(
                 template=user_template,
                 block_header=section.header,
@@ -368,6 +405,9 @@ class RuleAgent:
             raise RuntimeError("LLM is not configured. Pass llm=... to RuleAgent.")
 
         sections = state.get("sections", [])
+        table_sections = [s for s in sections if ":table" in s.source_location]
+        if table_sections:
+            sections = table_sections
         prompt_version = self.registry.get_active_prompt("grc_component_extraction")
         system_prompt = prompt_version["content"]
         spec = prompt_version.get("spec", {})
@@ -415,6 +455,98 @@ class RuleAgent:
             "extraction_summary": dict(raw.get("extraction_summary", {})) if isinstance(raw, dict) else {},
         }
 
+        def _append_error(model: BaseModel, msg: str) -> None:
+            existing = getattr(model, "validation_errors", [])
+            if not isinstance(existing, list):
+                existing = []
+            errors = list(existing)
+            errors.append(msg)
+            setattr(model, "validation_errors", errors)
+
+        def _normalize_list(val: Any) -> List[str]:
+            if val is None:
+                return []
+            if isinstance(val, list):
+                out: List[str] = []
+                for x in val:
+                    if x is None:
+                        continue
+                    s = str(x).strip()
+                    if s:
+                        out.append(s)
+                return out
+            if isinstance(val, str):
+                s = val.strip()
+                if not s:
+                    return []
+                parts = re.split(r"\s*(?:,|;|\n|\||\u2022|\u25cf)\s*", s)
+                return [p.strip() for p in parts if p and p.strip()]
+            return [str(val).strip()] if str(val).strip() else []
+
+        def _normalize_list_field(model: BaseModel, field: str) -> None:
+            try:
+                current = getattr(model, field, None)
+            except Exception:
+                return
+            normalized = _normalize_list(current)
+            setattr(model, field, normalized)
+
+        def _try_parse_date_to_iso(date_str: str) -> Optional[str]:
+            s = date_str.strip()
+            if not s:
+                return None
+            # Common formats in FDIC/Archer exports.
+            formats = [
+                "%Y-%m-%d",
+                "%m/%d/%Y",
+                "%B %d, %Y",
+                "%b %d, %Y",
+                "%B %d %Y",
+                "%b %d %Y",
+            ]
+            for fmt in formats:
+                try:
+                    return datetime.strptime(s, fmt).date().isoformat()
+                except ValueError:
+                    continue
+            return None
+
+        def _normalize_date_field(model: BaseModel, field: str) -> None:
+            val = getattr(model, field, None)
+            if val is None:
+                return
+            if not isinstance(val, str):
+                return
+            s = val.strip()
+            if not s:
+                return
+            iso = _try_parse_date_to_iso(s)
+            if iso is None:
+                # Keep original string per requirement.
+                _append_error(model, f"date_unparseable: {field}")
+                return
+            setattr(model, field, iso)
+
+        def _normalize_control_type_field(model: BaseModel, field: str = "control_type") -> None:
+            val = getattr(model, field, None)
+            if val is None:
+                return
+            if isinstance(val, str):
+                return
+            if isinstance(val, dict):
+                nature = str(val.get("nature") or "").strip()
+                automation = str(val.get("automation") or "").strip()
+                raw = str(val.get("raw") or "").strip()
+                if nature and automation:
+                    setattr(model, field, f"{nature} / {automation}")
+                    return
+                if raw:
+                    setattr(model, field, raw)
+                    return
+                setattr(model, field, json.dumps(val, ensure_ascii=False))
+                return
+            setattr(model, field, str(val))
+
         def _flag_missing_required(model: BaseModel, required_fields: List[str]) -> None:
             existing = getattr(model, "validation_errors", [])
             if not isinstance(existing, list):
@@ -433,6 +565,10 @@ class RuleAgent:
                 continue
             try:
                 model = PolicyComponent.model_validate(p)
+                _normalize_list_field(model, "related_regulations")
+                _normalize_list_field(model, "related_controls")
+                _normalize_list_field(model, "related_risks")
+                _normalize_date_field(model, "effective_date")
                 _flag_missing_required(
                     model,
                     required_fields=["component_id", "component_title", "component_owner", "policy_objective"],
@@ -446,6 +582,10 @@ class RuleAgent:
                 continue
             try:
                 model = RiskComponent.model_validate(r)
+                _normalize_list_field(model, "related_policies")
+                _normalize_list_field(model, "mitigation_controls")
+                _normalize_list_field(model, "related_controls")
+                _normalize_date_field(model, "effective_date")
                 _flag_missing_required(model, required_fields=["component_id", "risk_description", "risk_owner"])
                 validated["risks"].append(model)
             except ValidationError as e:
@@ -456,6 +596,11 @@ class RuleAgent:
                 continue
             try:
                 model = ControlComponent.model_validate(c)
+                _normalize_list_field(model, "evidence")
+                _normalize_list_field(model, "related_policies")
+                _normalize_list_field(model, "related_risks")
+                _normalize_date_field(model, "effective_date")
+                _normalize_control_type_field(model)
                 _flag_missing_required(
                     model,
                     required_fields=["component_id", "control_description", "control_owner"],
@@ -473,11 +618,113 @@ class RuleAgent:
         # aggressively drop components here because table extraction often yields
         # terse identifiers.
         validated = state.get("validated_components", {})
+        policies: List[PolicyComponent] = list(validated.get("policies", []))
+        risks: List[RiskComponent] = list(validated.get("risks", []))
+        controls: List[ControlComponent] = list(validated.get("controls", []))
+
+        policy_ids = {p.component_id for p in policies if isinstance(p, PolicyComponent) and p.component_id}
+        risk_ids = {r.component_id for r in risks if isinstance(r, RiskComponent) and r.component_id}
+        control_ids = {c.component_id for c in controls if isinstance(c, ControlComponent) and c.component_id}
+
+        def _append_error(model: BaseModel, msg: str) -> None:
+            existing = getattr(model, "validation_errors", [])
+            if not isinstance(existing, list):
+                existing = []
+            errors = list(existing)
+            errors.append(msg)
+            setattr(model, "validation_errors", errors)
+
+        def _check_refs(model: BaseModel, field: str, allowed: set[str]) -> None:
+            val = getattr(model, field, None)
+            if not val:
+                return
+            if isinstance(val, str):
+                vals = [v.strip() for v in re.split(r"\s*(?:,|;|\n|\|)\s*", val) if v.strip()]
+            elif isinstance(val, list):
+                vals = [str(v).strip() for v in val if v is not None and str(v).strip()]
+            else:
+                vals = [str(val).strip()] if str(val).strip() else []
+            for v in vals:
+                if v and v not in allowed:
+                    _append_error(model, f"missing_reference: {field}={v}")
+
+        for p in policies:
+            if not isinstance(p, PolicyComponent):
+                continue
+            _check_refs(p, "related_controls", control_ids)
+            _check_refs(p, "related_risks", risk_ids)
+
+        for r in risks:
+            if not isinstance(r, RiskComponent):
+                continue
+            _check_refs(r, "related_policies", policy_ids)
+            _check_refs(r, "mitigation_controls", control_ids)
+            _check_refs(r, "related_controls", control_ids)
+
+        for c in controls:
+            if not isinstance(c, ControlComponent):
+                continue
+            _check_refs(c, "related_policies", policy_ids)
+            _check_refs(c, "related_risks", risk_ids)
+
+        tables_processed = len(
+            {
+                getattr(m, "metadata").source_location
+                for m in [*policies, *risks, *controls]
+                if hasattr(m, "metadata") and getattr(m, "metadata") is not None
+            }
+        )
+
+        all_errors: List[str] = []
+        warnings: List[str] = []
+        for m in [*policies, *risks, *controls]:
+            errs = getattr(m, "validation_errors", [])
+            if isinstance(errs, list):
+                all_errors.extend([str(e) for e in errs])
+
+        if any(e.startswith("missing_reference") for e in all_errors):
+            warnings.append("One or more cross-references could not be validated")
+
+        # Simple completeness score: fraction of required fields present.
+        required_map: List[tuple[str, List[str], List[BaseModel]]] = [
+            ("policy", ["component_id", "component_title", "component_owner", "policy_objective"], policies),
+            ("risk", ["component_id", "risk_description", "risk_owner"], risks),
+            ("control", ["component_id", "control_description", "control_owner"], controls),
+        ]
+        required_total = 0
+        required_present = 0
+        for _, fields, models in required_map:
+            for m in models:
+                for f in fields:
+                    required_total += 1
+                    v = getattr(m, f, None)
+                    if v is None:
+                        continue
+                    if isinstance(v, str) and not v.strip():
+                        continue
+                    required_present += 1
+
+        extraction_quality = (required_present / required_total) if required_total else 0.0
+
+        summary = dict(validated.get("extraction_summary", {}))
+        summary.update(
+            {
+                "total_components": len(policies) + len(risks) + len(controls),
+                "policies_count": len(policies),
+                "risks_count": len(risks),
+                "controls_count": len(controls),
+                "tables_processed": tables_processed,
+                "extraction_quality": round(extraction_quality, 4),
+                "validation_errors": all_errors,
+                "warnings": warnings,
+            }
+        )
+
         final_components: Dict[str, Any] = {
-            "policies": list(validated.get("policies", [])),
-            "risks": list(validated.get("risks", [])),
-            "controls": list(validated.get("controls", [])),
-            "extraction_summary": dict(validated.get("extraction_summary", {})),
+            "policies": policies,
+            "risks": risks,
+            "controls": controls,
+            "extraction_summary": summary,
         }
         state["final_components"] = final_components
         return state
@@ -613,7 +860,7 @@ class RuleAgent:
         current_buf: List[str] = []
         para_index = 0
 
-        def flush() -> None:
+        def flush_paragraphs() -> None:
             nonlocal current_buf
             content = "\n".join(current_buf).strip()
             if content:
@@ -634,18 +881,49 @@ class RuleAgent:
 
             style = getattr(p.style, "name", "") if getattr(p, "style", None) else ""
             if style and style.lower().startswith("heading"):
-                flush()
+                flush_paragraphs()
                 current_header = text
                 current_buf.append(text)
+                lines.append(text)
                 continue
 
             current_buf.append(text)
             lines.append(text)
 
             if len(current_buf) >= 20:
-                flush()
+                flush_paragraphs()
 
-        flush()
+        flush_paragraphs()
+
+        for table_idx, table in enumerate(doc.tables, start=1):
+            rows: List[Dict[str, Any]] = []
+            raw_rows: List[List[str]] = []
+            for row in table.rows:
+                cells = [((c.text or "").strip()) for c in row.cells]
+                raw_rows.append(cells)
+                if not any(cells):
+                    continue
+
+                field = cells[0] if len(cells) >= 1 else ""
+                value = " | ".join(c for c in cells[1:] if c) if len(cells) > 1 else ""
+                rows.append({"field": field, "value": value, "cells": cells})
+
+            payload: Dict[str, Any] = {
+                "content_type": "docx_table",
+                "table_index": table_idx,
+                "header": current_header,
+                "rows": rows,
+                "raw_rows": raw_rows,
+                "row_count": len(rows),
+            }
+
+            sections.append(
+                DocumentSection(
+                    header=current_header,
+                    content=json.dumps(payload, ensure_ascii=False),
+                    source_location=f"docx:{path.name}:table{table_idx}",
+                )
+            )
 
         return "\n".join(lines), sections
 
