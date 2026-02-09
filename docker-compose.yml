@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  kratos-discover:
+    build: .
+    image: kratos-discover:latest
+    container_name: kratos-discover
+    environment:
+      # LLM Provider Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-20250805}
+      
+      # Application Configuration
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - RULE_AGENT_MODE=${RULE_AGENT_MODE:-rules}
+      - RULE_AGENT_OUTPUT_DIR=${RULE_AGENT_OUTPUT_DIR:-outputs}
+      - RULE_AGENT_LOG_LEVEL=${RULE_AGENT_LOG_LEVEL:-INFO}
+      - FDIC_370_PATH=${FDIC_370_PATH:-data/FDIC_370_GRC_Library_National_Bank.docx}
+    
+    volumes:
+      # Mount data directory for input documents
+      - ./data:/app/data
+      
+      # Mount outputs directory for results
+      - ./outputs:/app/outputs
+      
+      # Mount config directory for custom configurations
+      - ./config:/app/config
+      
+      # Mount prompts directory for custom prompts
+      - ./prompts:/app/prompts
+    
+    # Override default command to run extraction
+    # Uncomment and customize as needed:
+    # command: ["--provider", "openai", "--input", "data/document.docx", "--output", "results.json"]
+    
+    # For interactive mode, use:
+    # command: ["bash"]
+    # stdin_open: true
+    # tty: true
+    
+    restart: unless-stopped
+    
+    # Resource limits (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+# Optional: Add a volume for persistent data
+volumes:
+  outputs:
+    driver: local
