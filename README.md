@@ -344,6 +344,51 @@ Increase log verbosity for troubleshooting:
 python cli.py --log-level DEBUG
 ```
 
+## Docker Deployment
+
+Kratos-Discover includes Docker support for easy deployment.
+
+### Quick Start with Docker
+
+```bash
+# Build the image
+docker build -t kratos-discover .
+
+# Run with environment file
+docker run --rm \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/outputs:/app/outputs \
+  kratos-discover \
+  --provider openai --input data/document.docx
+```
+
+### Using Docker Compose
+
+```bash
+# Start services
+docker-compose up
+
+# Run extraction
+docker-compose run kratos-discover \
+  --provider openai --input data/document.docx
+```
+
+For detailed deployment instructions, see the [Deployment Guide](wiki/Deployment-Guide.md).
+
+## Documentation
+
+Comprehensive documentation is available in the [wiki](wiki/) directory:
+
+- **[Installation Guide](wiki/Installation-Guide.md)** - Setup and installation
+- **[Usage Guide](wiki/Usage-Guide.md)** - CLI and API usage
+- **[Configuration](wiki/Configuration.md)** - Environment variables and settings
+- **[Architecture](wiki/Architecture.md)** - System design and components
+- **[API Reference](wiki/API-Reference.md)** - Programmatic API documentation
+- **[Development Guide](wiki/Development-Guide.md)** - Contributing and development
+- **[Deployment Guide](wiki/Deployment-Guide.md)** - Docker and production deployment
+- **[Troubleshooting](wiki/Troubleshooting.md)** - Common issues and solutions
+
 ## Contributing
 
 Contributions are welcome. Please ensure:
@@ -351,6 +396,8 @@ Contributions are welcome. Please ensure:
 - Tests pass with `pytest`
 - New features include appropriate test coverage
 - Documentation is updated for new functionality
+
+See the [Development Guide](wiki/Development-Guide.md) for detailed contribution guidelines.
 
 ## License
 
