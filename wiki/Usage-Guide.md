@@ -277,7 +277,7 @@ agent = RuleAgent(registry=registry, llm=llm, config=config)
   "rule_type": "string",
   "rule_description": "string",
   "grounded_in": "string",
-  "confidence": 0.0-0.99,
+  "confidence": 0.95,
   "attributes": {
     "key": "value"
   },
