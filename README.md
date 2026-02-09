@@ -10,40 +10,16 @@ The system currently supports processing FDIC 370 GRC Library documents and prov
 
 ## The Problem It Solves
 
-### Before This Agent (Manual Process)
+This agent automates the extraction of structured regulatory compliance data from unstructured documents. Given a regulatory document (such as FDIC Part 370 or internal GRC policy libraries), the agent:
 
-**Scenario**: You receive a 200-page FDIC regulation document (Part 370) or a 50-page internal GRC policy library.
+1. **Segments** the document into logical sections for processing
+2. **Extracts** structured rules, policies, risks, and controls using LLM-powered analysis
+3. **Validates** the extracted data against predefined schemas to ensure correctness
+4. **Deduplicates** similar entries to eliminate redundancy
+5. **Grounds** each extracted item by verifying it against the source text to prevent hallucinations
+6. **Outputs** machine-readable JSON with complete metadata, ready for import into GRC platforms or further processing
 
-**Manual Process**:
-1. Analyst reads entire document (8-16 hours)
-2. Highlights requirements in Word/PDF
-3. Copies to Excel spreadsheet row by row
-4. Manually tags: rule type, threshold, owner, frequency, related controls
-5. Cross-references with existing GRC platform
-6. Validates for completeness
-7. Imports to RSA Archer/ServiceNow/Compliance tool
-
-**Results**:
-- **Time**: 40-80 hours per document
-- **Error Rate**: 15-30% (missed requirements, incorrect mappings, incomplete fields)
-- **Consistency**: Low (varies by analyst)
-- **Updates**: Requires full re-work when regulation changes
-
-### After This Agent (Automated Process)
-
-**Process**:
-1. Upload document (.docx, .pdf, .html)
-2. Agent segments document into logical sections
-3. LLM extracts structured rules/controls/risks using domain-specific prompt
-4. Pydantic validates schema compliance
-5. Cross-reference validation (Policy → Control links)
-6. Output: JSON with complete metadata, ready for GRC platform import
-
-**Results**:
-- **Time**: 5-15 minutes per document
-- **Error Rate**: 5-10% (with validation flags for manual review)
-- **Consistency**: High (same prompt → same output)
-- **Updates**: Re-run extraction on updated document (incremental)
+The agent transforms unstructured regulatory text into structured, validated data that can be directly consumed by compliance management systems.
 
 ## Key Features
 
