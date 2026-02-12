@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import os
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -82,6 +83,66 @@ def build_parser() -> argparse.ArgumentParser:
         dest="log_level",
         default=os.getenv("RULE_AGENT_LOG_LEVEL", "INFO"),
         help="Logging level (DEBUG, INFO, WARNING, ERROR)",
+    )
+
+    return parser
+
+
+def build_preprocess_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="rule-agent preprocess",
+        description="Run the deterministic Agent1 preprocessor (DOCX only)",
+    )
+
+    parser.add_argument(
+        "--input",
+        dest="input_path",
+        default=os.getenv("FDIC_370_PATH", "data/FDIC_370_GRC_Library_National_Bank.docx"),
+        help="Path to input document (.docx)",
+    )
+
+    parser.add_argument(
+        "--output",
+        dest="output_path",
+        default="",
+        help="Optional output JSON file path. If not set, writes to outputs/.",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        dest="output_dir",
+        default=os.getenv("RULE_AGENT_OUTPUT_DIR", "outputs"),
+        help="Directory to save outputs when --output is not set.",
+    )
+
+    parser.add_argument(
+        "--max-chunk-chars",
+        dest="max_chunk_chars",
+        type=int,
+        default=3000,
+        help="Maximum characters per chunk.",
+    )
+
+    parser.add_argument(
+        "--min-chunk-chars",
+        dest="min_chunk_chars",
+        type=int,
+        default=50,
+        help="Minimum characters per chunk (smaller chunks are skipped).",
+    )
+
+    parser.add_argument(
+        "--log-level",
+        dest="log_level",
+        default=os.getenv("RULE_AGENT_LOG_LEVEL", "INFO"),
+        help="Logging level (DEBUG, INFO, WARNING, ERROR)",
+    )
+
+    parser.add_argument(
+        "--dotenv",
+        dest="dotenv_path",
+        default=".env",
+        help="Path to .env file to load (default: .env at repo root)",
     )
 
     return parser
@@ -272,9 +333,80 @@ def run(
     return 0
 
 
+def run_preprocess(
+    input_path: str,
+    output_path: str = "",
+    output_dir: str = "outputs",
+    max_chunk_chars: int = 3000,
+    min_chunk_chars: int = 50,
+) -> int:
+    from agent1.nodes.preprocessor import parse_and_chunk
+
+    input_p = Path(input_path)
+    if not input_p.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+    input_stem = input_p.stem
+
+    if output_path:
+        output_file = Path(output_path)
+    else:
+        out_dir_path = Path(output_dir)
+        out_dir_path.mkdir(parents=True, exist_ok=True)
+        output_file = out_dir_path / f"preprocess_{input_stem}_{run_id}.json"
+
+    logger.info("[plan] Agent1 Preprocess")
+    logger.info("[plan] - Parse DOCX into deterministic chunks")
+    logger.info(
+        "[run] input=%s output=%s max_chunk_chars=%s min_chunk_chars=%s",
+        str(input_p),
+        str(output_file),
+        max_chunk_chars,
+        min_chunk_chars,
+    )
+
+    out = parse_and_chunk(
+        file_path=input_p,
+        file_type="docx",
+        max_chunk_chars=max_chunk_chars,
+        min_chunk_chars=min_chunk_chars,
+    )
+
+    payload = out.model_dump()
+    text = json.dumps(payload, indent=2)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(text, encoding="utf-8")
+    logger.info("[output] wrote=%s", str(output_file))
+
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
+    argv_list = list(argv) if argv is not None else sys.argv[1:]
+
+    if argv_list and argv_list[0] == "preprocess":
+        parser = build_preprocess_parser()
+        args = parser.parse_args(argv_list[1:])
+
+        logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
+
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("openai").setLevel(logging.WARNING)
+
+        load_dotenv(args.dotenv_path)
+
+        return run_preprocess(
+            input_path=args.input_path,
+            output_path=args.output_path,
+            output_dir=args.output_dir,
+            max_chunk_chars=int(args.max_chunk_chars),
+            min_chunk_chars=int(args.min_chunk_chars),
+        )
+
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv_list)
 
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
 
