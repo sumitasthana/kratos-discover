@@ -270,6 +270,78 @@ pytest tests/test_prompt_registry.py
 pytest tests/test_cli.py
 ```
 
+## Agent1 Deterministic Preprocessor (DOCX)
+
+This repository now includes a deterministic (no-LLM) preprocessor intended to be used as the first node of a pipeline. Its job is to parse a `.docx` file, detect basic structure (headings, prose blocks, lists, and tables), and emit clean, bounded text chunks.
+
+### Key Properties
+
+- Deterministic parsing: same input file produces the same chunk IDs.
+- No LLM calls.
+- Preserves table structure as `table_data` (rows x columns).
+- Light whitespace normalization only:
+  - trims trailing spaces per line
+  - collapses repeated blank lines
+
+### Current Support
+
+- Supported: `.docx`
+- Placeholders only: `.xlsx`, `.csv` (raise `NotImplementedError`)
+
+### Package Layout
+
+```
+agent1/
+  exceptions.py
+  models/
+    input.py
+    chunks.py
+  nodes/
+    preprocessor.py
+  parsers/
+    docx_parser.py
+    xlsx_parser.py  # placeholder
+    csv_parser.py   # placeholder
+  utils/
+    chunking.py
+```
+
+### Usage (Programmatic)
+
+```python
+from pathlib import Path
+
+from agent1.nodes.preprocessor import parse_and_chunk
+
+out = parse_and_chunk(
+    file_path=Path("data/FDIC_370_GRC_Library_National_Bank.docx"),
+    file_type="docx",
+    max_chunk_chars=3000,
+    min_chunk_chars=50,
+)
+
+print(out.total_chunks)
+print(out.document_stats)
+print(out.chunks[0].chunk_type, out.chunks[0].chunk_id)
+```
+
+### Logging
+
+Agent1 uses `structlog`. You will see structured events such as:
+
+- `parse_started` (file path, file type)
+- `parse_completed` (chunk counts, total characters)
+- `empty_chunk_skipped` (chunks dropped below `min_chunk_chars`)
+- `chunk_parse_failed` (non-fatal per-block parsing failures)
+
+### Tests
+
+Agent1 tests generate `.docx` fixtures at runtime (no committed binary fixtures):
+
+```bash
+pytest tests/test_agent1_preprocessor.py
+```
+
 ### Project Structure
 
 ```
