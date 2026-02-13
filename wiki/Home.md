@@ -4,6 +4,7 @@ Welcome to the Kratos-Discover documentation! This wiki provides comprehensive i
 
 ## 📖 Table of Contents
 
+### General Documentation
 - [Home](Home.md) - You are here
 - [Installation Guide](Installation-Guide.md) - Setup and installation instructions
 - [Usage Guide](Usage-Guide.md) - How to use the CLI and API
@@ -13,6 +14,14 @@ Welcome to the Kratos-Discover documentation! This wiki provides comprehensive i
 - [Development Guide](Development-Guide.md) - Contributing and development workflow
 - [Deployment Guide](Deployment-Guide.md) - Docker and production deployment
 - [Troubleshooting](Troubleshooting.md) - Common issues and solutions
+
+### Phase 1 Components
+- [Parse and Chunk](Phase1-Parse-and-Chunk.md) - ✅ Deterministic document parsing and chunking
+- [Schema Discovery Agent](Phase1-Schema-Discovery-Agent.md) - 🚧 Automatic schema inference (planned)
+- [Confidence Scorer](Phase1-Confidence-Scorer.md) - 🚧 Quality and confidence scoring (planned)
+- [Atomizer Agent](Phase1-Atomizer-Agent.md) - 🚧 Rule atomization (planned)
+- [Eval](Phase1-Eval.md) - 🚧 Pipeline evaluation and metrics (planned)
+- [Router](Phase1-Router.md) - 🚧 Intelligent routing layer (planned)
 
 ## 🎯 What is Kratos-Discover?
 
