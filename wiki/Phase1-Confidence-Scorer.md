@@ -95,7 +95,9 @@ scored_items = scorer.score(extracted_items, source_context)
 
 ### Score Range
 
-Expected to use a normalized scale (e.g., 0.0 to 0.99) consistent with existing Rule confidence scores.
+Expected to use a confidence range of 0.5 to 0.99, consistent with existing Rule confidence scores in the codebase. This range:
+- Has a minimum of 0.5 to filter out low-confidence extractions
+- Has a maximum of 0.99 to avoid claiming absolute certainty (reserving 1.0 as unattainable perfection)
 
 ## Output Format
 
