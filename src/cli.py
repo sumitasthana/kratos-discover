@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 
 from prompt_registry import PromptRegistry
 from rule_agent import RuleAgent
+from agent1.nodes.preprocessor import parse_and_chunk
+from agent1.nodes.schema_discovery import schema_discovery_agent
+from agent1.nodes.confidence_gate import check_confidence
 
 
 logger = logging.getLogger(__name__)
