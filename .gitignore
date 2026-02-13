@@ -35,3 +35,15 @@ data/**/*.html
 data/**/*.htm
 
 outputs/
+runs/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE
+*.swp
+*.swo
+*~

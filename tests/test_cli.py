@@ -5,6 +5,7 @@ from pathlib import Path
 from docx import Document
 
 from rule_agent import RuleAgent
+from agent1.nodes.preprocessor import parse_and_chunk
 
 
 def test_imports() -> None:
