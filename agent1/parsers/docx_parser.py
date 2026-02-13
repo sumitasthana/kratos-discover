@@ -22,6 +22,8 @@ logger = structlog.get_logger(__name__)
 
 
 _PAGE_OF_RE = re.compile(r"^\s*Page\s+\d+\s+of\s+\d+\s*$", re.IGNORECASE)
+_CONTROL_HEADING_RE = re.compile(r"^C-\d{3}\b", re.IGNORECASE)
+_STUB_RE = re.compile(r"full\s+control\s+details\s+documented\s+in\s+rsa\s+archer", re.IGNORECASE)
 
 
 def _iter_block_items(doc: DocxDocument) -> Iterator[Union[Paragraph, Table]]:
@@ -100,6 +102,33 @@ def _extract_table_data(table: Table) -> list[list[str]]:
     return rows
 
 
+def _looks_like_kv_entity_table(table_data: list[list[str]]) -> bool:
+    if len(table_data) < 2:
+        return False
+
+    # Vertical key-value table: 2 columns, first row is entity identifier or header-like row.
+    # FDIC 370 policy/control records frequently use a 2-col layout.
+    col_count = max((len(r) for r in table_data), default=0)
+    if col_count != 2:
+        return False
+
+    first_k = (table_data[0][0] or "").strip()
+    first_v = (table_data[0][1] or "").strip()
+    if not first_k or not first_v:
+        return False
+
+    # Prefer: explicit ID row (e.g., "Policy ID" | "P-001", "Control ID" | "C-001").
+    key_lower = first_k.lower()
+    if key_lower.endswith(" id"):
+        return True
+
+    # Or common header row pattern for 2-col kv tables.
+    if first_k.lower() in {"field", "attribute", "name"} and first_v.lower() in {"value", "values"}:
+        return True
+
+    return False
+
+
 def parse_docx_to_chunks(
     *,
     doc: DocxDocument,
@@ -120,9 +149,18 @@ def parse_docx_to_chunks(
     current_heading: str | None = None
     prose_buf: list[str] = []
     list_buf: list[str] = []
+    pending_heading: str | None = None
+
+    def _base_annotations() -> dict:
+        annotations: dict = {}
+        if pending_heading and _CONTROL_HEADING_RE.match(pending_heading):
+            annotations["record_type"] = "control"
+            annotations["record_id"] = pending_heading.split(":", 1)[0].strip()
+        return annotations
 
     def flush_prose(source_location: str) -> None:
         nonlocal prose_buf
+        nonlocal pending_heading
         if not prose_buf:
             return
 
@@ -133,6 +171,12 @@ def parse_docx_to_chunks(
                 stats["empty_chunks_skipped"] += 1
                 logger.warning("empty_chunk_skipped", reason="below_min_chunk_chars", chunk_type="prose")
                 continue
+
+            annotations = _base_annotations()
+            # Stub/incomplete controls: appear as heading + one-line prose with Archer reference.
+            if pending_heading and _CONTROL_HEADING_RE.match(pending_heading) and _STUB_RE.search(txt):
+                annotations["incomplete_record"] = True
+                annotations["incomplete_reason"] = "stub_control_reference_only"
 
             chunks.append(
                 ContentChunk(
@@ -145,15 +189,19 @@ def parse_docx_to_chunks(
                     source_location=source_location,
                     parent_heading=current_heading,
                     char_count=len(txt),
+                    annotations=annotations,
                 )
             )
             stats["prose_sections"] += 1
             stats["total_chars"] += len(txt)
 
         prose_buf = []
+        if pending_heading:
+            pending_heading = None
 
     def flush_list(source_location: str) -> None:
         nonlocal list_buf
+        nonlocal pending_heading
         if not list_buf:
             return
 
@@ -164,6 +212,7 @@ def parse_docx_to_chunks(
             list_buf = []
             return
 
+        annotations = _base_annotations()
         chunks.append(
             ContentChunk(
                 chunk_id="",
@@ -175,11 +224,14 @@ def parse_docx_to_chunks(
                 source_location=source_location,
                 parent_heading=current_heading,
                 char_count=len(txt),
+                annotations=annotations,
             )
         )
         stats["list_sections"] += 1
         stats["total_chars"] += len(txt)
         list_buf = []
+        if pending_heading:
+            pending_heading = None
 
     block_idx = 0
 
@@ -197,21 +249,8 @@ def parse_docx_to_chunks(
                     flush_list(source_location=f"block {block_idx}")
 
                     current_heading = text
-                    chunks.append(
-                        ContentChunk(
-                            chunk_id="",
-                            chunk_type="heading",
-                            content_text=text,
-                            table_data=None,
-                            row_count=None,
-                            col_count=None,
-                            source_location=f"block {block_idx}",
-                            parent_heading=None,
-                            char_count=len(text),
-                        )
-                    )
+                    pending_heading = text
                     stats["heading_count"] += 1
-                    stats["total_chars"] += len(text)
                     continue
 
                 if _is_list_item(block):
@@ -232,34 +271,64 @@ def parse_docx_to_chunks(
             if not table_data:
                 continue
 
-            # Split if needed
-            for split_idx, (sub_table, start_row, end_row) in enumerate(
-                split_table_by_rows(table_data, max_chunk_chars=max_chunk_chars), start=1
-            ):
-                t_txt = normalize_text(table_to_text(sub_table))
-                if len(t_txt) < min_chunk_chars:
+            table_number = stats["table_count"] + 1
+
+            # For vertical KV entity tables (common in FDIC 370), do not split mid-entity.
+            if _looks_like_kv_entity_table(table_data):
+                t_txt = normalize_text(table_to_text(table_data))
+                if len(t_txt) >= min_chunk_chars:
+                    annotations = _base_annotations()
+                    chunks.append(
+                        ContentChunk(
+                            chunk_id="",
+                            chunk_type="table",
+                            content_text=t_txt,
+                            table_data=table_data,
+                            row_count=len(table_data),
+                            col_count=2,
+                            source_location=f"table {table_number}:rows 1-{max(1, len(table_data) - 1)}",
+                            parent_heading=current_heading,
+                            char_count=len(t_txt),
+                            annotations=annotations,
+                        )
+                    )
+                    stats["total_chars"] += len(t_txt)
+                else:
                     stats["empty_chunks_skipped"] += 1
                     logger.warning("empty_chunk_skipped", reason="below_min_chunk_chars", chunk_type="table")
-                    continue
+            else:
+                # Split if needed
+                for split_idx, (sub_table, start_row, end_row) in enumerate(
+                    split_table_by_rows(table_data, max_chunk_chars=max_chunk_chars), start=1
+                ):
+                    t_txt = normalize_text(table_to_text(sub_table))
+                    if len(t_txt) < min_chunk_chars:
+                        stats["empty_chunks_skipped"] += 1
+                        logger.warning("empty_chunk_skipped", reason="below_min_chunk_chars", chunk_type="table")
+                        continue
 
-                row_count = len(sub_table)
-                col_count = max((len(r) for r in sub_table), default=0)
-                chunks.append(
-                    ContentChunk(
-                        chunk_id="",
-                        chunk_type="table",
-                        content_text=t_txt,
-                        table_data=sub_table,
-                        row_count=row_count,
-                        col_count=col_count,
-                        source_location=f"table {stats['table_count'] + 1}:rows {start_row}-{end_row}",
-                        parent_heading=current_heading,
-                        char_count=len(t_txt),
+                    row_count = len(sub_table)
+                    col_count = max((len(r) for r in sub_table), default=0)
+                    annotations = _base_annotations()
+                    chunks.append(
+                        ContentChunk(
+                            chunk_id="",
+                            chunk_type="table",
+                            content_text=t_txt,
+                            table_data=sub_table,
+                            row_count=row_count,
+                            col_count=col_count,
+                            source_location=f"table {table_number}:rows {start_row}-{end_row}",
+                            parent_heading=current_heading,
+                            char_count=len(t_txt),
+                            annotations=annotations,
+                        )
                     )
-                )
-                stats["total_chars"] += len(t_txt)
+                    stats["total_chars"] += len(t_txt)
 
             stats["table_count"] += 1
+            if pending_heading:
+                pending_heading = None
 
         except Exception as e:
             logger.warning("chunk_parse_failed", block_index=block_idx, error=str(e))

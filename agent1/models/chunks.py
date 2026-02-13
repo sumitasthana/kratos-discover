@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,7 @@ class ContentChunk(BaseModel):
     source_location: str
     parent_heading: str | None = None
     char_count: int = 0
+    annotations: dict[str, Any] = Field(default_factory=dict)
 
     def model_post_init(self, __context) -> None:
         if not self.char_count:

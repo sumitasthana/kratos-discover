@@ -9,7 +9,14 @@ from agent1.exceptions import EmptyDocumentError
 from agent1.nodes.preprocessor import parse_and_chunk
 
 
-def _write_docx(path: Path, *, with_content: bool = True, large_table: bool = False) -> None:
+def _write_docx(
+    path: Path,
+    *,
+    with_content: bool = True,
+    large_table: bool = False,
+    large_kv_table: bool = False,
+    stub_control: bool = False,
+) -> None:
     doc = Document()
 
     if not with_content:
@@ -38,6 +45,13 @@ def _write_docx(path: Path, *, with_content: bool = True, large_table: bool = Fa
     t.cell(2, 0).text = "Owner"
     t.cell(2, 1).text = "Compliance"
 
+    if large_kv_table:
+        # Extend the same vertical key-value table to exceed max_chunk_chars.
+        for i in range(80):
+            r = t.add_row().cells
+            r[0].text = f"Field {i}"
+            r[1].text = ("X" * 40) + str(i)
+
     if large_table:
         t2 = doc.add_table(rows=1, cols=3)
         t2.cell(0, 0).text = "ColA"
@@ -48,6 +62,10 @@ def _write_docx(path: Path, *, with_content: bool = True, large_table: bool = Fa
             r[0].text = f"A{i}"
             r[1].text = ("B" * 30) + str(i)
             r[2].text = ("C" * 30) + str(i)
+
+    if stub_control:
+        doc.add_heading("C-011: Stub Control", level=2)
+        doc.add_paragraph("Full control details documented in RSA Archer Controls module.")
 
     doc.save(str(path))
 
@@ -62,23 +80,13 @@ def test_docx_heading_tracking_and_types(tmp_path: Path) -> None:
     assert out.total_chunks == len(out.chunks)
     assert out.document_stats["heading_count"] >= 2
     assert out.document_stats["table_count"] >= 1
-    assert any(c.chunk_type == "heading" for c in out.chunks)
+    assert not any(c.chunk_type == "heading" for c in out.chunks)
     assert any(c.chunk_type == "list" for c in out.chunks)
     assert any(c.chunk_type == "prose" for c in out.chunks)
     assert any(c.chunk_type == "table" for c in out.chunks)
 
-    # After "Policy Library" heading, subsequent chunks should carry parent_heading
-    policy_heading = "Policy Library"
-    after_policy = False
-    seen_child = False
-    for c in out.chunks:
-        if c.chunk_type == "heading" and c.content_text.strip() == policy_heading:
-            after_policy = True
-            continue
-        if after_policy and c.chunk_type in {"list", "prose", "table"}:
-            assert c.parent_heading == policy_heading
-            seen_child = True
-    assert seen_child
+    # Headings are not emitted as chunks; they must be attached via parent_heading.
+    assert any(c.parent_heading == "Policy Library" for c in out.chunks)
 
 
 def test_docx_table_splitting_repeats_header(tmp_path: Path) -> None:
@@ -98,6 +106,29 @@ def test_docx_table_splitting_repeats_header(tmp_path: Path) -> None:
         assert tc.table_data[0] == header
         assert tc.row_count is not None and tc.row_count >= 1
         assert tc.col_count == 3
+
+
+def test_docx_kv_table_never_splits_mid_entity(tmp_path: Path) -> None:
+    path = tmp_path / "large_kv.docx"
+    _write_docx(path, with_content=True, large_kv_table=True)
+
+    out = parse_and_chunk(path, file_type="docx", max_chunk_chars=250, min_chunk_chars=1)
+
+    # The 2-column vertical key-value table should remain a single chunk.
+    kv_chunks = [c for c in out.chunks if c.chunk_type == "table" and c.col_count == 2]
+    assert len(kv_chunks) == 1
+    assert kv_chunks[0].row_count is not None and kv_chunks[0].row_count > 10
+
+
+def test_docx_stub_control_flagged_incomplete(tmp_path: Path) -> None:
+    path = tmp_path / "stub_control.docx"
+    _write_docx(path, with_content=True, stub_control=True)
+
+    out = parse_and_chunk(path, file_type="docx", max_chunk_chars=1000, min_chunk_chars=1)
+
+    stub_chunks = [c for c in out.chunks if c.annotations.get("incomplete_record") is True]
+    assert len(stub_chunks) >= 1
+    assert any(c.annotations.get("record_id") == "C-011" for c in stub_chunks)
 
 
 def test_chunk_id_determinism(tmp_path: Path) -> None:
