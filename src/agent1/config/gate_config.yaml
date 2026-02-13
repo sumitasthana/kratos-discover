@@ -1,0 +1,13 @@
+thresholds:
+  grc_export:
+    auto_accept: 0.85
+    human_review: 0.50
+  regulatory_docx:
+    auto_accept: 0.80
+    human_review: 0.40
+  data_dictionary:
+    auto_accept: 0.90
+    human_review: 0.60
+  default:
+    auto_accept: 0.85
+    human_review: 0.50
