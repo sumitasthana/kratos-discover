@@ -42,7 +42,7 @@ dev = [
 ]
 
 [project.scripts]
-kratos-discover = "cli:main"
+kratos-discover = "src.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

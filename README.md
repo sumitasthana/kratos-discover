@@ -54,7 +54,7 @@ The system implements a multi-node LangGraph pipeline:
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Virtual environment (recommended)
 
 ### Setup Steps
@@ -76,7 +76,16 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Install dependencies:
+3. Install the package and dependencies:
+```bash
+# Install in development mode with all dependencies
+pip install -e ".[dev]"
+
+# Or install just the runtime dependencies
+pip install -e .
+```
+
+Alternatively, install dependencies directly:
 ```bash
 pip install -r requirements.txt
 ```
@@ -112,41 +121,46 @@ Note: The `data/` directory is gitignored to prevent accidental commits of sensi
 
 Extract rules using OpenAI:
 ```bash
-python cli.py --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
+python -m src.cli --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
 ```
 
 Extract rules using Anthropic Claude:
 ```bash
-python cli.py --provider anthropic --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
+python -m src.cli --provider anthropic --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
+```
+
+Alternatively, if you installed the package:
+```bash
+kratos-discover --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
 ```
 
 #### GRC Component Extraction
 
 Extract policies, risks, and controls:
 ```bash
-python cli.py --mode grc_components --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output grc_results.json
+python -m src.cli --mode grc_components --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output grc_results.json
 ```
 
 #### Advanced Options
 
 Enable debug mode with intermediate outputs:
 ```bash
-python cli.py --provider openai --debug --dump-debug --output results.json
+python -m src.cli --provider openai --debug --dump-debug --output results.json
 ```
 
 Override the active prompt version:
 ```bash
-python cli.py --provider openai --prompt-version v1.2 --output results.json
+python -m src.cli --provider openai --prompt-version v1.2 --output results.json
 ```
 
 Specify a custom output directory:
 ```bash
-python cli.py --provider openai --output-dir ./my_outputs
+python -m src.cli --provider openai --output-dir ./my_outputs
 ```
 
 Adjust logging level:
 ```bash
-python cli.py --provider openai --log-level DEBUG
+python -m src.cli --provider openai --log-level DEBUG
 ```
 
 ### Programmatic API
@@ -156,8 +170,8 @@ import os
 from pathlib import Path
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
-from rule_agent import RuleAgent
-from prompt_registry import PromptRegistry
+from src.rule_agent import RuleAgent
+from src.prompt_registry import PromptRegistry
 
 # Initialize prompt registry
 registry = PromptRegistry(base_dir=Path("."))
@@ -291,18 +305,23 @@ This repository now includes a deterministic (no-LLM) preprocessor intended to b
 ### Package Layout
 
 ```
-agent1/
+src/agent1/
+  __init__.py
   exceptions.py
   models/
+    __init__.py
     input.py
     chunks.py
   nodes/
+    __init__.py
     preprocessor.py
   parsers/
+    __init__.py
     docx_parser.py
     xlsx_parser.py  # placeholder
     csv_parser.py   # placeholder
   utils/
+    __init__.py
     chunking.py
 ```
 
@@ -310,8 +329,7 @@ agent1/
 
 ```python
 from pathlib import Path
-
-from agent1.nodes.preprocessor import parse_and_chunk
+from src.agent1.nodes.preprocessor import parse_and_chunk
 
 out = parse_and_chunk(
     file_path=Path("data/FDIC_370_GRC_Library_National_Bank.docx"),
@@ -346,10 +364,14 @@ pytest tests/test_agent1_preprocessor.py
 
 ```
 kratos-discover/
-├── cli.py                      # Command-line interface
-├── rule_agent.py               # Main RuleAgent implementation
-├── prompt_registry.py          # Prompt version management
+├── README.md                   # Project documentation
+├── pyproject.toml              # Python package configuration
+├── setup.py                    # Package setup script
 ├── requirements.txt            # Python dependencies
+├── Dockerfile                  # Docker container definition
+├── docker-compose.yml          # Docker Compose configuration
+├── .gitignore                  # Git ignore rules
+├── .dockerignore               # Docker ignore rules
 ├── config/
 │   ├── .env.example            # Environment variable template
 │   └── rule_attributes_schema.yaml
@@ -359,11 +381,33 @@ kratos-discover/
 │       ├── v1.0.yaml
 │       ├── v1.1.yaml
 │       └── v1.2.yaml
+├── src/
+│   ├── cli.py                  # Command-line interface
+│   ├── rule_agent.py           # Main RuleAgent implementation
+│   ├── prompt_registry.py      # Prompt version management
+│   └── agent1/                 # Deterministic preprocessor module
+│       ├── __init__.py
+│       ├── exceptions.py
+│       ├── models/             # Data models
+│       ├── nodes/              # Processing nodes
+│       ├── parsers/            # Document parsers
+│       └── utils/              # Utility functions
 ├── tests/
+│   ├── conftest.py
 │   ├── test_cli.py
 │   ├── test_rule_agent.py
 │   ├── test_prompt_registry.py
-│   └── conftest.py
+│   └── test_agent1_preprocessor.py
+├── wiki/                       # Documentation wiki
+│   ├── Home.md
+│   ├── Installation-Guide.md
+│   ├── Usage-Guide.md
+│   ├── Configuration.md
+│   ├── Architecture.md
+│   ├── API-Reference.md
+│   ├── Development-Guide.md
+│   ├── Deployment-Guide.md
+│   └── Troubleshooting.md
 ├── data/                       # Input documents (gitignored)
 └── outputs/                    # Extraction results (gitignored)
 ```
@@ -373,7 +417,7 @@ kratos-discover/
 Debug mode provides visibility into the extraction pipeline:
 
 ```bash
-python cli.py --debug --dump-debug --provider openai
+python -m src.cli --debug --dump-debug --provider openai
 ```
 
 This creates a timestamped debug directory containing:
@@ -426,7 +470,7 @@ ls -la data/FDIC_370_GRC_Library_National_Bank.docx
 
 Increase log verbosity for troubleshooting:
 ```bash
-python cli.py --log-level DEBUG
+python -m src.cli --log-level DEBUG
 ```
 
 ## Docker Deployment

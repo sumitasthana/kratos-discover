@@ -34,5 +34,5 @@ RUN useradd -m -u 1000 kratos && \
 USER kratos
 
 # Default command - can be overridden
-ENTRYPOINT ["python", "cli.py"]
+ENTRYPOINT ["python", "-m", "src.cli"]
 CMD ["--help"]

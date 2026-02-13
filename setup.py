@@ -27,7 +27,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "kratos-discover=cli:main",
+            "kratos-discover=src.cli:main",
         ],
     },
 )
