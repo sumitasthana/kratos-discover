@@ -22,8 +22,48 @@ logger = structlog.get_logger(__name__)
 
 
 _PAGE_OF_RE = re.compile(r"^\s*Page\s+\d+\s+of\s+\d+\s*$", re.IGNORECASE)
-_CONTROL_HEADING_RE = re.compile(r"^C-\d{3}\b", re.IGNORECASE)
+_ENTITY_HEADING_RE = re.compile(r"^([PRC])-(\d{3})\b", re.IGNORECASE)
 _STUB_RE = re.compile(r"full\s+control\s+details\s+documented\s+in\s+rsa\s+archer", re.IGNORECASE)
+
+
+def _extract_entity_from_heading(heading: str) -> tuple[str, str] | None:
+    match = _ENTITY_HEADING_RE.match(heading)
+    if not match:
+        return None
+    prefix = match.group(1).upper()
+    entity_id = f"{prefix}-{match.group(2)}"
+    record_type_map = {"P": "policy", "R": "risk", "C": "control"}
+    record_type = record_type_map.get(prefix, "unknown")
+    return (record_type, entity_id)
+
+
+def _extract_entity_from_table_first_row(table_data: list[list[str]]) -> tuple[str, str] | None:
+    if len(table_data) < 1:
+        return None
+    first_row = table_data[0]
+    if len(first_row) < 2:
+        return None
+    key = (first_row[0] or "").strip().lower()
+    val = (first_row[1] or "").strip()
+    if not val:
+        return None
+    if key == "policy id" and val.startswith("P-"):
+        return ("policy", val)
+    if key == "risk id" and val.startswith("R-"):
+        return ("risk", val)
+    if key == "control id" and val.startswith("C-"):
+        return ("control", val)
+    return None
+
+
+def _get_base_annotations_from_table(table_data: list[list[str]]) -> dict:
+    annotations: dict = {}
+    entity = _extract_entity_from_table_first_row(table_data)
+    if entity:
+        record_type, entity_id = entity
+        annotations["record_type"] = record_type
+        annotations["record_id"] = entity_id
+    return annotations
 
 
 def _iter_block_items(doc: DocxDocument) -> Iterator[Union[Paragraph, Table]]:
@@ -153,9 +193,12 @@ def parse_docx_to_chunks(
 
     def _base_annotations() -> dict:
         annotations: dict = {}
-        if pending_heading and _CONTROL_HEADING_RE.match(pending_heading):
-            annotations["record_type"] = "control"
-            annotations["record_id"] = pending_heading.split(":", 1)[0].strip()
+        if pending_heading:
+            entity = _extract_entity_from_heading(pending_heading)
+            if entity:
+                record_type, entity_id = entity
+                annotations["record_type"] = record_type
+                annotations["record_id"] = entity_id
         return annotations
 
     def flush_prose(source_location: str) -> None:
@@ -174,7 +217,7 @@ def parse_docx_to_chunks(
 
             annotations = _base_annotations()
             # Stub/incomplete controls: appear as heading + one-line prose with Archer reference.
-            if pending_heading and _CONTROL_HEADING_RE.match(pending_heading) and _STUB_RE.search(txt):
+            if pending_heading and _ENTITY_HEADING_RE.match(pending_heading) and _STUB_RE.search(txt):
                 annotations["incomplete_record"] = True
                 annotations["incomplete_reason"] = "stub_control_reference_only"
 
@@ -277,7 +320,7 @@ def parse_docx_to_chunks(
             if _looks_like_kv_entity_table(table_data):
                 t_txt = normalize_text(table_to_text(table_data))
                 if len(t_txt) >= min_chunk_chars:
-                    annotations = _base_annotations()
+                    annotations = _get_base_annotations_from_table(table_data)
                     chunks.append(
                         ContentChunk(
                             chunk_id="",
@@ -309,7 +352,7 @@ def parse_docx_to_chunks(
 
                     row_count = len(sub_table)
                     col_count = max((len(r) for r in sub_table), default=0)
-                    annotations = _base_annotations()
+                    annotations = _get_base_annotations_from_table(table_data)
                     chunks.append(
                         ContentChunk(
                             chunk_id="",

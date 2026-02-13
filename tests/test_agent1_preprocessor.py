@@ -16,6 +16,7 @@ def _write_docx(
     large_table: bool = False,
     large_kv_table: bool = False,
     stub_control: bool = False,
+    policy_and_risk: bool = False,
 ) -> None:
     doc = Document()
 
@@ -66,6 +67,21 @@ def _write_docx(
     if stub_control:
         doc.add_heading("C-011: Stub Control", level=2)
         doc.add_paragraph("Full control details documented in RSA Archer Controls module.")
+
+    if policy_and_risk:
+        doc.add_heading("P-001: Test Policy", level=2)
+        t_p = doc.add_table(rows=2, cols=2)
+        t_p.cell(0, 0).text = "Policy ID"
+        t_p.cell(0, 1).text = "P-001"
+        t_p.cell(1, 0).text = "Description"
+        t_p.cell(1, 1).text = "Test policy description"
+
+        doc.add_heading("R-001: Test Risk", level=2)
+        t_r = doc.add_table(rows=2, cols=2)
+        t_r.cell(0, 0).text = "Risk ID"
+        t_r.cell(0, 1).text = "R-001"
+        t_r.cell(1, 0).text = "Description"
+        t_r.cell(1, 1).text = "Test risk description"
 
     doc.save(str(path))
 
