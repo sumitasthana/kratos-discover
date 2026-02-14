@@ -151,6 +151,58 @@ def build_preprocess_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_schema_discovery_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="rule-agent discover-schema",
+        description="Run the Schema Discovery Agent (Node 2) to infer document structure",
+    )
+
+    parser.add_argument(
+        "--input",
+        dest="input_path",
+        required=True,
+        help="Path to input document (.docx)",
+    )
+
+    parser.add_argument(
+        "--output",
+        dest="output_path",
+        default="",
+        help="Optional output JSON file path. If not set, writes to outputs/.",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        dest="output_dir",
+        default=os.getenv("RULE_AGENT_OUTPUT_DIR", "outputs"),
+        help="Directory to save outputs when --output is not set.",
+    )
+
+    parser.add_argument(
+        "--max-chunks",
+        dest="max_chunks",
+        type=int,
+        default=10,
+        help="Maximum number of chunks to send to Claude for discovery.",
+    )
+
+    parser.add_argument(
+        "--log-level",
+        dest="log_level",
+        default=os.getenv("RULE_AGENT_LOG_LEVEL", "INFO"),
+        help="Logging level (DEBUG, INFO, WARNING, ERROR)",
+    )
+
+    parser.add_argument(
+        "--dotenv",
+        dest="dotenv_path",
+        default=".env",
+        help="Path to .env file to load (default: .env at repo root)",
+    )
+
+    return parser
+
+
 def _build_llm(provider: str) -> Any:
     if provider == "openai":
         from langchain_openai import ChatOpenAI
@@ -385,6 +437,89 @@ def run_preprocess(
     return 0
 
 
+def run_schema_discovery(
+    input_path: str,
+    output_path: str = "",
+    output_dir: str = "outputs",
+    max_chunks: int = 10,
+) -> int:
+    input_p = Path(input_path)
+    if not input_p.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+    input_stem = input_p.stem
+
+    if output_path:
+        output_file = Path(output_path)
+    else:
+        out_dir_path = Path(output_dir)
+        out_dir_path.mkdir(parents=True, exist_ok=True)
+        output_file = out_dir_path / f"schema_discovery_{input_stem}_{run_id}.json"
+
+    logger.info("[plan] Schema Discovery Agent (Node 2)")
+    logger.info("[plan] - Parse DOCX into chunks")
+    logger.info("[plan] - Call Claude to infer document structure")
+    logger.info("[plan] - Return SchemaMap with discovered entities and fields")
+    logger.info(
+        "[run] input=%s output=%s max_chunks=%s",
+        str(input_p),
+        str(output_file),
+        max_chunks,
+    )
+
+    # Step 1: Parse document
+    preprocessor_output = parse_and_chunk(
+        file_path=input_p,
+        file_type="docx",
+        max_chunk_chars=3000,
+        min_chunk_chars=50,
+    )
+    logger.info("[preprocess] chunks=%s", len(preprocessor_output.chunks))
+
+    # Step 2: Initialize state - pass ALL chunks for stratified sampling
+    # The schema discovery agent will do its own stratified sampling
+    state = {
+        "file_path": str(preprocessor_output.file_path),
+        "chunks": preprocessor_output.chunks,  # Pass all chunks for stratified sampling
+        "prompt_versions": {},
+        "errors": [],
+    }
+
+    # Step 3: Run schema discovery
+    logger.info("[schema_discovery] calling Claude...")
+    result = schema_discovery_agent(state)
+    schema_map = result.get("schema_map")
+
+    if schema_map is None:
+        logger.error("[schema_discovery] failed to discover schema")
+        return 1
+
+    logger.info(
+        "[schema_discovery] entities=%s avg_confidence=%.2f%% pattern=%s",
+        len(schema_map.entities),
+        schema_map.avg_confidence * 100,
+        schema_map.structural_pattern,
+    )
+
+    # Step 4: Check confidence gate
+    gate_result = check_confidence(state | {"schema_map": schema_map})
+    logger.info("[confidence_gate] decision=%s", gate_result)
+
+    # Step 5: Save output
+    payload = {
+        "schema_map": schema_map.model_dump(),
+        "gate_decision": gate_result,
+        "preprocessor_stats": preprocessor_output.document_stats,
+    }
+    text = json.dumps(payload, indent=2)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(text, encoding="utf-8")
+    logger.info("[output] wrote=%s", str(output_file))
+
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     argv_list = list(argv) if argv is not None else sys.argv[1:]
 
@@ -406,6 +541,25 @@ def main(argv: Optional[list[str]] = None) -> int:
             output_dir=args.output_dir,
             max_chunk_chars=int(args.max_chunk_chars),
             min_chunk_chars=int(args.min_chunk_chars),
+        )
+
+    if argv_list and argv_list[0] == "discover-schema":
+        parser = build_schema_discovery_parser()
+        args = parser.parse_args(argv_list[1:])
+
+        logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
+
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("anthropic").setLevel(logging.WARNING)
+
+        load_dotenv(args.dotenv_path)
+
+        return run_schema_discovery(
+            input_path=args.input_path,
+            output_path=args.output_path,
+            output_dir=args.output_dir,
+            max_chunks=int(args.max_chunks),
         )
 
     parser = build_parser()
