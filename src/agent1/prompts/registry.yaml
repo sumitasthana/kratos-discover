@@ -1,0 +1,20 @@
+# Prompt Registry for Agent1 Pipeline
+# Maps prompt names to their versions and file paths
+
+prompts:
+  schema_discovery:
+    current_version: "v1"
+    versions:
+      v1:
+        file: "schema_discovery_v1.yaml"
+        description: "Initial schema discovery prompt"
+
+  requirement_atomizer:
+    current_version: "v1.0"
+    versions:
+      v1.0:
+        file: "requirement_atomizer/v1.0.yaml"
+        description: "Base requirement extraction prompt"
+      v1.0_retry:
+        file: "requirement_atomizer/v1.0_retry.yaml"
+        description: "Conservative retry prompt with higher confidence threshold"

@@ -1,0 +1,140 @@
+[
+  {
+    "chunk_id": "chunk-001",
+    "chunk_type": "table",
+    "content_text": "Policy ID: P-001\nPolicy Title: Data Quality and Accuracy Policy\nPolicy Owner: Chief Data Officer\nPolicy Statement: National Banking Corporation shall maintain deposit account records meeting 99.5% accuracy standards as measured by quarterly data quality assessments.\nScope: All deposit accounts subject to FDIC Part 370\nRelated Regulations: 12 CFR Part 370.3(b)",
+    "table_data": [
+      ["Policy ID", "P-001"],
+      ["Policy Title", "Data Quality and Accuracy Policy"],
+      ["Policy Owner", "Chief Data Officer"],
+      ["Policy Statement", "National Banking Corporation shall maintain deposit account records meeting 99.5% accuracy standards as measured by quarterly data quality assessments."],
+      ["Scope", "All deposit accounts subject to FDIC Part 370"],
+      ["Related Regulations", "12 CFR Part 370.3(b)"]
+    ],
+    "row_count": 6,
+    "col_count": 2,
+    "source_location": "table 1:rows 1-6",
+    "parent_heading": "P-001: Data Quality and Accuracy Policy",
+    "char_count": 450,
+    "annotations": {
+      "record_type": "policy",
+      "record_id": "P-001"
+    }
+  },
+  {
+    "chunk_id": "chunk-002",
+    "chunk_type": "table",
+    "content_text": "Control ID: C-001\nControl Description: Validate account opening data against source documents within 24 hours of account creation.\nControl Type: Preventive\nControl Owner: Operations Manager\nTesting Frequency: Quarterly\nEvidence: System validation logs, exception reports",
+    "table_data": [
+      ["Control ID", "C-001"],
+      ["Control Description", "Validate account opening data against source documents within 24 hours of account creation."],
+      ["Control Type", "Preventive"],
+      ["Control Owner", "Operations Manager"],
+      ["Testing Frequency", "Quarterly"],
+      ["Evidence", "System validation logs, exception reports"]
+    ],
+    "row_count": 6,
+    "col_count": 2,
+    "source_location": "table 5:rows 1-6",
+    "parent_heading": "C-001: Account Opening Data Validation",
+    "char_count": 380,
+    "annotations": {
+      "record_type": "control",
+      "record_id": "C-001"
+    }
+  },
+  {
+    "chunk_id": "chunk-003",
+    "chunk_type": "prose",
+    "content_text": "The covered institution must be capable of supporting deposit insurance calculation within twenty-four (24) hours following failure of the institution. This capability must be demonstrated through annual testing and certification to the FDIC.",
+    "table_data": null,
+    "row_count": null,
+    "col_count": null,
+    "source_location": "block 45",
+    "parent_heading": "File Generation and Testing Requirements",
+    "char_count": 280,
+    "annotations": {
+      "record_type": "policy",
+      "record_id": "P-003"
+    }
+  },
+  {
+    "chunk_id": "chunk-004",
+    "chunk_type": "prose",
+    "content_text": "Joint accounts (JNT) require the CI to maintain a signature card for each joint account with the signature of each co-owner. Each co-owner is insured up to $250,000 for their ownership interest in all joint accounts at the same institution.",
+    "table_data": null,
+    "row_count": null,
+    "col_count": null,
+    "source_location": "block 78",
+    "parent_heading": "Ownership Category Requirements",
+    "char_count": 265,
+    "annotations": {
+      "record_type": "policy",
+      "record_id": "P-005"
+    }
+  },
+  {
+    "chunk_id": "chunk-005",
+    "chunk_type": "prose",
+    "content_text": "A covered institution means an insured depository institution that has two million or more deposit accounts. The FDIC was established in 1933 to maintain stability and public confidence in the nation's financial system. This regulation applies to all covered institutions.",
+    "table_data": null,
+    "row_count": null,
+    "col_count": null,
+    "source_location": "block 12",
+    "parent_heading": "Definitions and Background",
+    "char_count": 290,
+    "annotations": {}
+  },
+  {
+    "chunk_id": "chunk-006",
+    "chunk_type": "table",
+    "content_text": "Risk ID: R-001\nRisk Description: Data quality issues may result in inaccurate deposit insurance calculations\nInherent Risk Rating: High\nResidual Risk Rating: Medium\nRisk Owner: Chief Risk Officer\nMitigation Controls: C-001, C-002, C-007",
+    "table_data": [
+      ["Risk ID", "R-001"],
+      ["Risk Description", "Data quality issues may result in inaccurate deposit insurance calculations"],
+      ["Inherent Risk Rating", "High"],
+      ["Residual Risk Rating", "Medium"],
+      ["Risk Owner", "Chief Risk Officer"],
+      ["Mitigation Controls", "C-001, C-002, C-007"]
+    ],
+    "row_count": 6,
+    "col_count": 2,
+    "source_location": "table 10:rows 1-6",
+    "parent_heading": "R-001: Data Quality and Completeness Risk",
+    "char_count": 320,
+    "annotations": {
+      "record_type": "risk",
+      "record_id": "R-001"
+    }
+  },
+  {
+    "chunk_id": "chunk-007",
+    "chunk_type": "prose",
+    "content_text": "Each legal entity customer must identify beneficial owners with 25 percent or more ownership interest. Documentation must include government-issued photo identification for all beneficial owners. Records must be updated within 30 days of any ownership change.",
+    "table_data": null,
+    "row_count": null,
+    "col_count": null,
+    "source_location": "block 92",
+    "parent_heading": "Beneficial Ownership Requirements",
+    "char_count": 295,
+    "annotations": {
+      "record_type": "policy",
+      "record_id": "P-006"
+    }
+  },
+  {
+    "chunk_id": "chunk-008",
+    "chunk_type": "prose",
+    "content_text": "Data completeness rate must meet or exceed 98.5% for all required fields in the deposit insurance determination file. Missing or incomplete records must be flagged and remediated within 5 business days.",
+    "table_data": null,
+    "row_count": null,
+    "col_count": null,
+    "source_location": "block 55",
+    "parent_heading": "Data Quality Standards",
+    "char_count": 225,
+    "annotations": {
+      "record_type": "policy",
+      "record_id": "P-001"
+    }
+  }
+]

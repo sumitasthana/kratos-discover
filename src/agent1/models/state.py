@@ -1,18 +1,24 @@
 from __future__ import annotations
 
-from typing import TypedDict, Literal
+from typing import TYPE_CHECKING, TypedDict, Literal
+
 from agent1.models.chunks import ContentChunk, PreprocessorOutput
 from agent1.models.schema_map import SchemaMap
 
+if TYPE_CHECKING:
+    from agent1.models.requirements import RegulatoryRequirement, ExtractionMetadata
+
 
 class Phase1State(TypedDict, total=False):
+    """State object passed through the LangGraph pipeline."""
     file_path: str
     preprocessor_output: PreprocessorOutput | None
     chunks: list[ContentChunk]
     schema_map: SchemaMap | None
     gate_decision: Literal["accept", "human_review", "reject"] | None
     human_corrections: SchemaMap | None
-    requirements: list
+    requirements: list["RegulatoryRequirement"]
+    extraction_metadata: "ExtractionMetadata | None"
     quality_report: dict | None
     prompt_versions: dict[str, str]
     extraction_iteration: int
