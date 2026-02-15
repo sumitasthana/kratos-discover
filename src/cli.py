@@ -17,6 +17,7 @@ from rule_agent import RuleAgent
 from agent1.nodes.preprocessor import parse_and_chunk
 from agent1.nodes.schema_discovery import schema_discovery_agent
 from agent1.nodes.confidence_gate import check_confidence
+from agent1.nodes.atomizer import RequirementAtomizerNode
 
 
 logger = logging.getLogger(__name__)
@@ -184,6 +185,50 @@ def build_schema_discovery_parser() -> argparse.ArgumentParser:
         type=int,
         default=10,
         help="Maximum number of chunks to send to Claude for discovery.",
+    )
+
+    parser.add_argument(
+        "--log-level",
+        dest="log_level",
+        default=os.getenv("RULE_AGENT_LOG_LEVEL", "INFO"),
+        help="Logging level (DEBUG, INFO, WARNING, ERROR)",
+    )
+
+    parser.add_argument(
+        "--dotenv",
+        dest="dotenv_path",
+        default=".env",
+        help="Path to .env file to load (default: .env at repo root)",
+    )
+
+    return parser
+
+
+def build_atomizer_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="rule-agent atomize",
+        description="Run the Requirement Atomizer Agent (Node 4) to extract regulatory requirements",
+    )
+
+    parser.add_argument(
+        "--input",
+        dest="input_path",
+        required=True,
+        help="Path to input document (.docx)",
+    )
+
+    parser.add_argument(
+        "--output",
+        dest="output_path",
+        default="",
+        help="Optional output JSON file path. If not set, writes to outputs/.",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        dest="output_dir",
+        default=os.getenv("RULE_AGENT_OUTPUT_DIR", "outputs"),
+        help="Directory to save outputs when --output is not set.",
     )
 
     parser.add_argument(
@@ -520,6 +565,104 @@ def run_schema_discovery(
     return 0
 
 
+def run_atomizer(
+    input_path: str,
+    output_path: str = "",
+    output_dir: str = "outputs",
+) -> int:
+    """Run the full pipeline: preprocess -> schema discovery -> atomizer."""
+    input_p = Path(input_path)
+    if not input_p.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+    input_stem = input_p.stem
+
+    if output_path:
+        output_file = Path(output_path)
+    else:
+        out_dir_path = Path(output_dir)
+        out_dir_path.mkdir(parents=True, exist_ok=True)
+        output_file = out_dir_path / f"requirements_{input_stem}_{run_id}.json"
+
+    logger.info("[plan] Requirement Atomizer Pipeline (Nodes 1-4)")
+    logger.info("[plan] - Node 1: Parse DOCX into chunks")
+    logger.info("[plan] - Node 2: Schema Discovery")
+    logger.info("[plan] - Node 3: Confidence Gate")
+    logger.info("[plan] - Node 4: Requirement Atomizer")
+    logger.info("[run] input=%s output=%s", str(input_p), str(output_file))
+
+    # Node 1: Parse document
+    preprocessor_output = parse_and_chunk(
+        file_path=input_p,
+        file_type="docx",
+        max_chunk_chars=3000,
+        min_chunk_chars=50,
+    )
+    logger.info("[node1] preprocess chunks=%s", len(preprocessor_output.chunks))
+
+    # Node 2: Schema Discovery
+    state = {
+        "file_path": str(preprocessor_output.file_path),
+        "chunks": preprocessor_output.chunks,
+        "prompt_versions": {},
+        "errors": [],
+        "extraction_iteration": 1,
+    }
+
+    logger.info("[node2] schema_discovery calling Claude...")
+    schema_result = schema_discovery_agent(state)
+    schema_map = schema_result.get("schema_map")
+
+    if schema_map is None:
+        logger.error("[node2] schema_discovery failed")
+        return 1
+
+    logger.info(
+        "[node2] schema_discovery entities=%s avg_confidence=%.2f%%",
+        len(schema_map.entities),
+        schema_map.avg_confidence * 100,
+    )
+
+    # Node 3: Confidence Gate
+    state["schema_map"] = schema_map
+    gate_result = check_confidence(state)
+    logger.info("[node3] confidence_gate decision=%s", gate_result)
+
+    if gate_result == "reject":
+        logger.error("[node3] confidence_gate rejected schema")
+        return 1
+
+    # Node 4: Requirement Atomizer
+    logger.info("[node4] atomizer calling Claude...")
+    atomizer = RequirementAtomizerNode()
+    atomizer_result = atomizer(state)
+
+    requirements = atomizer_result.get("requirements", [])
+    extraction_metadata = atomizer_result.get("extraction_metadata")
+
+    logger.info(
+        "[node4] atomizer extracted=%s requirements avg_confidence=%.2f%%",
+        len(requirements),
+        extraction_metadata.avg_confidence * 100 if extraction_metadata else 0,
+    )
+
+    # Save output
+    payload = {
+        "requirements": [r.model_dump() for r in requirements],
+        "extraction_metadata": extraction_metadata.model_dump() if extraction_metadata else {},
+        "schema_map": schema_map.model_dump(),
+        "gate_decision": gate_result,
+        "preprocessor_stats": preprocessor_output.document_stats,
+    }
+    text = json.dumps(payload, indent=2)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(text, encoding="utf-8")
+    logger.info("[output] wrote=%s", str(output_file))
+
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     argv_list = list(argv) if argv is not None else sys.argv[1:]
 
@@ -560,6 +703,24 @@ def main(argv: Optional[list[str]] = None) -> int:
             output_path=args.output_path,
             output_dir=args.output_dir,
             max_chunks=int(args.max_chunks),
+        )
+
+    if argv_list and argv_list[0] == "atomize":
+        parser = build_atomizer_parser()
+        args = parser.parse_args(argv_list[1:])
+
+        logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
+
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("anthropic").setLevel(logging.WARNING)
+
+        load_dotenv(args.dotenv_path)
+
+        return run_atomizer(
+            input_path=args.input_path,
+            output_path=args.output_path,
+            output_dir=args.output_dir,
         )
 
     parser = build_parser()

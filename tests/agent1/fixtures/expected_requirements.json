@@ -1,0 +1,156 @@
+[
+  {
+    "requirement_id": "R-DQ-a1b2c3",
+    "rule_type": "data_quality_threshold",
+    "rule_description": "Deposit account records must maintain minimum 99.5% accuracy rate as measured by quarterly data quality assessments.",
+    "grounded_in": "National Banking Corporation shall maintain deposit account records meeting 99.5% accuracy standards as measured by quarterly data quality assessments.",
+    "confidence": 0.95,
+    "attributes": {
+      "metric": "Data accuracy",
+      "threshold_value": 99.5,
+      "threshold_unit": "percent",
+      "threshold_direction": "minimum"
+    },
+    "metadata": {
+      "source_chunk_id": "chunk-001",
+      "source_location": "table 1:rows 1-6",
+      "schema_version": "schema-test-001",
+      "prompt_version": "v1.0",
+      "extraction_iteration": 1
+    }
+  },
+  {
+    "requirement_id": "R-TL-d4e5f6",
+    "rule_type": "update_timeline",
+    "rule_description": "Deposit insurance calculation must be completed within 24 hours following institution failure.",
+    "grounded_in": "capable of supporting deposit insurance calculation within twenty-four (24) hours following failure",
+    "confidence": 0.95,
+    "attributes": {
+      "applies_to": "Deposit insurance calculation",
+      "threshold_value": 24,
+      "threshold_unit": "hours"
+    },
+    "metadata": {
+      "source_chunk_id": "chunk-003",
+      "source_location": "block 45",
+      "schema_version": "schema-test-001",
+      "prompt_version": "v1.0",
+      "extraction_iteration": 1
+    }
+  },
+  {
+    "requirement_id": "R-OWN-g7h8i9",
+    "rule_type": "ownership_category",
+    "rule_description": "Joint accounts require signature cards with signatures of all co-owners.",
+    "grounded_in": "Joint accounts (JNT) require the CI to maintain a signature card for each joint account with the signature of each co-owner",
+    "confidence": 0.92,
+    "attributes": {
+      "ownership_type": "Joint (JNT)",
+      "required_data_elements": ["Signature card", "All co-owner signatures"],
+      "insurance_coverage": "$250,000 per co-owner"
+    },
+    "metadata": {
+      "source_chunk_id": "chunk-004",
+      "source_location": "block 78",
+      "schema_version": "schema-test-001",
+      "prompt_version": "v1.0",
+      "extraction_iteration": 1
+    }
+  },
+  {
+    "requirement_id": "R-BO-j1k2l3",
+    "rule_type": "beneficial_ownership_threshold",
+    "rule_description": "Beneficial owners with 25% or more ownership interest must be identified.",
+    "grounded_in": "Each legal entity customer must identify beneficial owners with 25 percent or more ownership interest",
+    "confidence": 0.90,
+    "attributes": {
+      "threshold_value": 25,
+      "threshold_unit": "percent_ownership",
+      "applies_to": "Legal entity customers"
+    },
+    "metadata": {
+      "source_chunk_id": "chunk-007",
+      "source_location": "block 92",
+      "schema_version": "schema-test-001",
+      "prompt_version": "v1.0",
+      "extraction_iteration": 1
+    }
+  },
+  {
+    "requirement_id": "R-DOC-m4n5o6",
+    "rule_type": "documentation_requirement",
+    "rule_description": "Government-issued photo identification required for all beneficial owners.",
+    "grounded_in": "Documentation must include government-issued photo identification for all beneficial owners",
+    "confidence": 0.88,
+    "attributes": {
+      "applies_to": "Beneficial owners",
+      "requirement": "Government-issued photo identification"
+    },
+    "metadata": {
+      "source_chunk_id": "chunk-007",
+      "source_location": "block 92",
+      "schema_version": "schema-test-001",
+      "prompt_version": "v1.0",
+      "extraction_iteration": 1
+    }
+  },
+  {
+    "requirement_id": "R-UPD-p7q8r9",
+    "rule_type": "update_requirement",
+    "rule_description": "Ownership records must be updated within 30 days of any ownership change.",
+    "grounded_in": "Records must be updated within 30 days of any ownership change",
+    "confidence": 0.85,
+    "attributes": {
+      "applies_when": "Ownership change",
+      "requirement": "Update ownership records",
+      "applies_to": "Legal entity accounts"
+    },
+    "metadata": {
+      "source_chunk_id": "chunk-007",
+      "source_location": "block 92",
+      "schema_version": "schema-test-001",
+      "prompt_version": "v1.0",
+      "extraction_iteration": 1
+    }
+  },
+  {
+    "requirement_id": "R-DQ-s1t2u3",
+    "rule_type": "data_quality_threshold",
+    "rule_description": "Data completeness rate must meet or exceed 98.5% for all required fields.",
+    "grounded_in": "Data completeness rate must meet or exceed 98.5% for all required fields in the deposit insurance determination file",
+    "confidence": 0.92,
+    "attributes": {
+      "metric": "Data completeness",
+      "threshold_value": 98.5,
+      "threshold_unit": "percent",
+      "threshold_direction": "minimum"
+    },
+    "metadata": {
+      "source_chunk_id": "chunk-008",
+      "source_location": "block 55",
+      "schema_version": "schema-test-001",
+      "prompt_version": "v1.0",
+      "extraction_iteration": 1
+    }
+  },
+  {
+    "requirement_id": "R-TL-v4w5x6",
+    "rule_type": "update_timeline",
+    "rule_description": "Missing or incomplete records must be remediated within 5 business days.",
+    "grounded_in": "Missing or incomplete records must be flagged and remediated within 5 business days",
+    "confidence": 0.88,
+    "attributes": {
+      "applies_to": "Missing or incomplete records",
+      "threshold_value": 5,
+      "threshold_unit": "days",
+      "consequence": "Flagged for remediation"
+    },
+    "metadata": {
+      "source_chunk_id": "chunk-008",
+      "source_location": "block 55",
+      "schema_version": "schema-test-001",
+      "prompt_version": "v1.0",
+      "extraction_iteration": 1
+    }
+  }
+]

@@ -1,0 +1,182 @@
+{
+  "document_format": "docx",
+  "structural_pattern": "vertical_key_value_tables",
+  "structural_confidence": 0.92,
+  "inferred_document_category": "grc_library",
+  "entities": [
+    {
+      "discovered_label": "POLICY",
+      "identifier_field": "policy_id",
+      "identifier_pattern": "P-\\d{3}",
+      "record_count": 10,
+      "fields": [
+        {
+          "raw_label": "Policy ID",
+          "canonical_field": "policy_id",
+          "inferred_type": "identifier",
+          "confidence": 0.98,
+          "mapping_rationale": "Unique identifier for policy records",
+          "example_values": ["P-001", "P-002"]
+        },
+        {
+          "raw_label": "Policy Title",
+          "canonical_field": "policy_title",
+          "inferred_type": "text",
+          "confidence": 0.95,
+          "mapping_rationale": "Descriptive name of the policy",
+          "example_values": ["Data Quality and Accuracy Policy"]
+        },
+        {
+          "raw_label": "Policy Owner",
+          "canonical_field": "policy_owner",
+          "inferred_type": "person_or_role",
+          "confidence": 0.92,
+          "mapping_rationale": "Role responsible for policy",
+          "example_values": ["Chief Data Officer"]
+        },
+        {
+          "raw_label": "Policy Statement",
+          "canonical_field": "policy_statement",
+          "inferred_type": "text",
+          "confidence": 0.95,
+          "mapping_rationale": "Main policy content",
+          "example_values": []
+        },
+        {
+          "raw_label": "Scope",
+          "canonical_field": "scope",
+          "inferred_type": "text",
+          "confidence": 0.90,
+          "mapping_rationale": "Applicability of the policy",
+          "example_values": []
+        },
+        {
+          "raw_label": "Related Regulations",
+          "canonical_field": "related_regulations",
+          "inferred_type": "reference_list",
+          "confidence": 0.88,
+          "mapping_rationale": "References to regulatory citations",
+          "example_values": ["12 CFR Part 370.3(b)"]
+        }
+      ]
+    },
+    {
+      "discovered_label": "CONTROL",
+      "identifier_field": "control_id",
+      "identifier_pattern": "C-\\d{3}",
+      "record_count": 25,
+      "fields": [
+        {
+          "raw_label": "Control ID",
+          "canonical_field": "control_id",
+          "inferred_type": "identifier",
+          "confidence": 0.98,
+          "mapping_rationale": "Unique identifier for control records",
+          "example_values": ["C-001", "C-002"]
+        },
+        {
+          "raw_label": "Control Description",
+          "canonical_field": "control_description",
+          "inferred_type": "text",
+          "confidence": 0.95,
+          "mapping_rationale": "Description of the control activity",
+          "example_values": []
+        },
+        {
+          "raw_label": "Control Type",
+          "canonical_field": "control_type",
+          "inferred_type": "enum",
+          "confidence": 0.92,
+          "mapping_rationale": "Classification of control",
+          "example_values": ["Preventive", "Detective"]
+        },
+        {
+          "raw_label": "Control Owner",
+          "canonical_field": "control_owner",
+          "inferred_type": "person_or_role",
+          "confidence": 0.90,
+          "mapping_rationale": "Role responsible for control",
+          "example_values": ["Operations Manager"]
+        },
+        {
+          "raw_label": "Testing Frequency",
+          "canonical_field": "testing_frequency",
+          "inferred_type": "enum",
+          "confidence": 0.88,
+          "mapping_rationale": "How often control is tested",
+          "example_values": ["Quarterly", "Annual"]
+        },
+        {
+          "raw_label": "Evidence",
+          "canonical_field": "evidence",
+          "inferred_type": "list",
+          "confidence": 0.85,
+          "mapping_rationale": "Documentation supporting control effectiveness",
+          "example_values": []
+        }
+      ]
+    },
+    {
+      "discovered_label": "RISK",
+      "identifier_field": "risk_id",
+      "identifier_pattern": "R-\\d{3}",
+      "record_count": 8,
+      "fields": [
+        {
+          "raw_label": "Risk ID",
+          "canonical_field": "risk_id",
+          "inferred_type": "identifier",
+          "confidence": 0.98,
+          "mapping_rationale": "Unique identifier for risk records",
+          "example_values": ["R-001", "R-002"]
+        },
+        {
+          "raw_label": "Risk Description",
+          "canonical_field": "risk_description",
+          "inferred_type": "text",
+          "confidence": 0.95,
+          "mapping_rationale": "Description of the risk",
+          "example_values": []
+        },
+        {
+          "raw_label": "Inherent Risk Rating",
+          "canonical_field": "inherent_risk_rating",
+          "inferred_type": "enum",
+          "confidence": 0.92,
+          "mapping_rationale": "Risk level before controls",
+          "example_values": ["High", "Medium", "Low"]
+        },
+        {
+          "raw_label": "Residual Risk Rating",
+          "canonical_field": "residual_risk_rating",
+          "inferred_type": "enum",
+          "confidence": 0.92,
+          "mapping_rationale": "Risk level after controls",
+          "example_values": ["High", "Medium", "Low"]
+        },
+        {
+          "raw_label": "Risk Owner",
+          "canonical_field": "risk_owner",
+          "inferred_type": "person_or_role",
+          "confidence": 0.90,
+          "mapping_rationale": "Role responsible for risk",
+          "example_values": ["Chief Risk Officer"]
+        },
+        {
+          "raw_label": "Mitigation Controls",
+          "canonical_field": "mitigation_controls",
+          "inferred_type": "reference_list",
+          "confidence": 0.88,
+          "mapping_rationale": "Controls that mitigate this risk",
+          "example_values": ["C-001, C-002, C-007"]
+        }
+      ]
+    }
+  ],
+  "relationships": [],
+  "unmapped_fields": [],
+  "anomalies": [],
+  "total_records_estimated": 43,
+  "schema_version": "schema-test-001",
+  "avg_confidence": 0.92
+}
