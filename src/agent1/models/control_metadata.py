@@ -335,12 +335,41 @@ def infer_systems(rule_type: str, rule_description: str) -> list[str]:
     return systems[:3]
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Safely convert value to float."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            # Remove % sign if present
+            clean = value.replace("%", "").strip()
+            return float(clean)
+        except ValueError:
+            return default
+    return default
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Safely convert value to int."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            clean = value.replace("%", "").strip()
+            return int(float(clean))
+        except ValueError:
+            return default
+    return default
+
+
 def infer_exception_threshold(
     rule_type: str,
     attributes: dict,
 ) -> dict[str, Any]:
     """Generate exception threshold tiers."""
-    threshold = attributes.get("threshold_value", 99)
+    threshold = _safe_float(attributes.get("threshold_value", 99), 99.0)
     unit = attributes.get("threshold_unit", "percent")
     
     if rule_type == "data_quality_threshold" and unit in ("percent", "%"):
@@ -362,7 +391,7 @@ def infer_exception_threshold(
             },
         }
     elif rule_type == "update_timeline":
-        timeline = attributes.get("timeline_value", 30)
+        timeline = _safe_int(attributes.get("timeline_value", 30), 30)
         return {
             "breach": {
                 "condition": f"Update not completed within {timeline} {unit}",
