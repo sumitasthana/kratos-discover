@@ -23,6 +23,9 @@ from agent1.models.requirements import (
 )
 from agent1.models.schema_map import SchemaMap
 from agent1.models.state import Phase1State
+from agent1.scoring.confidence_scorer import score_requirement, ConfidenceResult
+from agent1.models.control_metadata import enrich_requirement_metadata
+from agent1.scoring.verb_replacer import replace_vague_verbs
 
 logger = structlog.get_logger(__name__)
 
@@ -491,10 +494,21 @@ class RequirementAtomizerNode:
     def _validate_and_adjust(
         self, requirements: list[RegulatoryRequirement]
     ) -> list[RegulatoryRequirement]:
-        """Validate attributes and adjust confidence for invalid ones."""
+        """
+        Validate attributes and compute feature-based confidence scores.
+        
+        Uses the confidence scorer to compute scores based on:
+        - Grounding match (word overlap): 0.30 weight
+        - Completeness (required attrs): 0.20 weight
+        - Quantification specificity: 0.20 weight
+        - Schema compliance: 0.15 weight
+        - Coherence: 0.10 weight
+        - Domain signals: 0.05 weight
+        """
         validated: list[RegulatoryRequirement] = []
 
         for req in requirements:
+            # First check attribute validation
             is_valid, missing = validate_requirement_attributes(req)
 
             if not is_valid:
@@ -503,8 +517,43 @@ class RequirementAtomizerNode:
                     requirement_id=req.requirement_id,
                     missing_fields=missing,
                 )
-                # Cap confidence at 0.60 for invalid attributes
-                req.confidence = min(req.confidence, 0.60)
+
+            # Compute feature-based confidence score
+            confidence_result = score_requirement(req)
+            
+            # Update requirement with computed confidence
+            req.confidence = confidence_result.score
+            
+            # Store confidence metadata in attributes for downstream use
+            req.attributes["_confidence_features"] = confidence_result.features.to_dict()
+            req.attributes["_confidence_rationale"] = confidence_result.rationale
+            req.attributes["_grounding_classification"] = confidence_result.grounding_classification
+            req.attributes["_grounding_evidence"] = confidence_result.grounding_evidence
+
+            # Replace vague verbs with specific actionable language
+            verb_result = replace_vague_verbs(req.rule_description, req.attributes)
+            if verb_result.has_vague_verbs:
+                req.attributes["_original_description"] = req.rule_description
+                req.attributes["_verb_replacements"] = verb_result.replacements_made
+                # Note: We store but don't replace the description to preserve grounding
+                # The replaced version is available in _actionable_description
+                req.attributes["_actionable_description"] = verb_result.replaced
+
+            # Enrich with control operationalization metadata
+            control_metadata = enrich_requirement_metadata(
+                rule_type=req.rule_type.value,
+                rule_description=req.rule_description,
+                attributes=req.attributes,
+            )
+            req.attributes["_control_metadata"] = control_metadata.to_dict()
+
+            logger.debug(
+                "atomizer_confidence_scored",
+                requirement_id=req.requirement_id,
+                confidence=confidence_result.score,
+                grounding_classification=confidence_result.grounding_classification,
+                features=confidence_result.features.to_dict(),
+            )
 
             validated.append(req)
 

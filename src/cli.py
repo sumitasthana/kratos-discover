@@ -18,6 +18,7 @@ from agent1.nodes.preprocessor import parse_and_chunk
 from agent1.nodes.schema_discovery import schema_discovery_agent
 from agent1.nodes.confidence_gate import check_confidence
 from agent1.nodes.atomizer import RequirementAtomizerNode
+from agent1.eval.eval_node import eval_quality
 
 
 logger = logging.getLogger(__name__)
@@ -647,10 +648,27 @@ def run_atomizer(
         extraction_metadata.avg_confidence * 100 if extraction_metadata else 0,
     )
 
+    # Node 5: Eval Quality
+    state["requirements"] = requirements
+    state["extraction_metadata"] = extraction_metadata
+    state["prompt_versions"] = atomizer_result.get("prompt_versions", {})
+    
+    logger.info("[node5] eval_quality running checks...")
+    eval_result = eval_quality(state)
+    eval_report = eval_result.get("eval_report", {})
+    
+    logger.info(
+        "[node5] eval_quality failure_type=%s severity=%s quality_score=%.2f%%",
+        eval_report.get("failure_type", "none"),
+        eval_report.get("failure_severity", "low"),
+        eval_report.get("overall_quality_score", 0) * 100,
+    )
+
     # Save output
     payload = {
         "requirements": [r.model_dump() for r in requirements],
         "extraction_metadata": extraction_metadata.model_dump() if extraction_metadata else {},
+        "eval_report": eval_report,
         "schema_map": schema_map.model_dump(),
         "gate_decision": gate_result,
         "preprocessor_stats": preprocessor_output.document_stats,

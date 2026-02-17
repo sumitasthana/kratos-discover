@@ -20,6 +20,7 @@ class Phase1State(TypedDict, total=False):
     requirements: list["RegulatoryRequirement"]
     extraction_metadata: "ExtractionMetadata | None"
     quality_report: dict | None
+    eval_report: dict | None  # Output from Eval node
     prompt_versions: dict[str, str]
     extraction_iteration: int
     errors: list[str]
