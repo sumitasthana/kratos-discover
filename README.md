@@ -238,14 +238,16 @@ Kratos-discover is built as a **modular, multi-stage document processing system*
           │  Advanced            │
           │  Requirements        │
           └─────────┬────────────┘
-                    │                                             │
-                    │                                             │
-          ┌─────────▼───────────┐                       ┌─────────▼────────────┐
-          │  Shared Components   │◄─────────────────────│  Shared Components   │
-          │  - Models            │                       │  - Scoring           │
-          │  - LLM Clients       │                       │  - Chunking          │
-          │  - Prompt Registry   │                       │  - Parsers           │
-          └──────────────────────┘                       └──────────────────────┘
+                    │
+                    │
+          ┌─────────▼───────────┐
+          │  Shared Components   │
+          │  - Models            │
+          │  - LLM Clients       │
+          │  - Scoring           │
+          │  - Chunking          │
+          │  - Parsers           │
+          └──────────────────────┘
 ```
 
 ### Pipeline: Advanced Requirements Processing (via Agent1)
@@ -601,7 +603,14 @@ This module contains canonical enums and type mappings used by Agent1. It preven
 
 2. **`RuleType`**: Eight types of regulatory requirements
    
-   **Core Types** (used by Agent1 atomizer):
+   - `DATA_QUALITY_THRESHOLD`: Quantitative standards with measurable metrics (e.g., "accuracy must be ≥95%")
+   - `OWNERSHIP_CATEGORY`: Account ownership classifications (e.g., "joint account", "trust account")
+   - `BENEFICIAL_OWNERSHIP_THRESHOLD`: Numeric triggers for beneficial owners (e.g., "25% ownership")
+   - `DOCUMENTATION_REQUIREMENT`: Required documents or records (e.g., "must maintain W-9 forms")
+   - `UPDATE_REQUIREMENT`: Event-triggered record updates (e.g., "update within 30 days of address change")
+   - `UPDATE_TIMELINE`: Time-bound deadlines or SLAs (e.g., "annual certification required")
+   - `CONTROL_REQUIREMENT`: Control-specific requirements
+   - `RISK_STATEMENT`: Risk-related statements
 
 3. **`RULE_TYPE_CODES`**: Maps rule types to 2-3 character codes for ID generation
    - `DATA_QUALITY_THRESHOLD` → "DQ"
@@ -1337,143 +1346,36 @@ print(f"Quality Score: {results.evaluation.overall_score}")
 The `RegulatoryRequirement` model represents a single extracted requirement from the Agent1 pipeline.
 
 ```python
-class Rule(BaseModel):
-    rule_id: str                    # Unique identifier (e.g., "DQ-001", "OWN-002")
-    category: RuleCategory          # "rule", "control", or "risk"
+class RegulatoryRequirement(BaseModel):
+    requirement_id: str             # Unique identifier (e.g., "R-DQ-a1b2c3")
     rule_type: RuleType             # Type of requirement (see RuleType enum)
-    rule_description: str           # Human-readable description of the rule
-    grounded_in: str                # Source text that validates this rule
-    confidence: float               # Confidence score from 0.5 to 0.99
-    attributes: Dict[str, Any]      # Additional structured attributes
+    rule_description: str           # Plain-English statement of the obligation
+    grounded_in: str                # Verbatim text from source that supports this requirement
+    confidence: float               # Confidence score from 0.50 to 0.99
+    attributes: Dict[str, Any]      # Type-specific structured attributes
     metadata: RuleMetadata          # Source information and extraction metadata
 ```
 
-**Example Rule**:
+**Example Requirement**:
 ```json
 {
-  "rule_id": "DQ-001",
-  "category": "rule",
+  "requirement_id": "R-DQ-a1b2c3",
   "rule_type": "data_quality_threshold",
   "rule_description": "Customer name accuracy must be at least 95%",
   "grounded_in": "Section 2.3 states that institutions must maintain customer name records with a minimum accuracy threshold of 95 percent.",
   "confidence": 0.87,
   "attributes": {
-    "threshold": "95%",
     "metric": "accuracy",
-    "applies_to": "customer name",
-    "enforcement": "required"
+    "threshold_value": 95,
+    "threshold_direction": ">=",
+    "threshold_unit": "%"
   },
   "metadata": {
-    "source_section": "Section 2.3",
-    "document_location": "page 12",
-    "extraction_timestamp": "2026-02-18T03:10:36Z"
-  }
-}
-```
-
-### GRC Component Models
-
-The GRC (Governance, Risk, Compliance) models represent organizational policies, risks, and controls.
-
-#### PolicyComponent
-
-Represents an organizational policy or governance requirement.
-
-```python
-class PolicyComponent(BaseModel):
-    policy_id: str              # Unique identifier (e.g., "POL-001")
-    title: str                  # Policy title
-    description: str            # Full policy description
-    owner: str                  # Policy owner (department/role)
-    category: str               # Policy category
-    source_table: str           # Source table reference
-    validation_status: str      # Validation status
-    metadata: Dict[str, Any]    # Additional metadata
-```
-
-**Example Policy**:
-```json
-{
-  "policy_id": "POL-001",
-  "title": "Customer Data Quality Policy",
-  "description": "All customer records must meet minimum data quality standards",
-  "owner": "Data Governance Team",
-  "category": "data_management",
-  "source_table": "Table 2: Policy Requirements",
-  "validation_status": "validated",
-  "metadata": {
-    "source_block": "chunk_015",
-    "effective_date": "2025-01-01"
-  }
-}
-```
-
-#### RiskComponent
-
-Represents an identified risk or risk statement.
-
-```python
-class RiskComponent(BaseModel):
-    risk_id: str                # Unique identifier (e.g., "RSK-001")
-    title: str                  # Risk title
-    description: str            # Full risk description
-    risk_type: str              # Type of risk (operational, compliance, etc.)
-    severity: str               # Risk severity (high, medium, low)
-    likelihood: str             # Likelihood (high, medium, low)
-    owner: str                  # Risk owner
-    source_table: str           # Source table reference
-    metadata: Dict[str, Any]    # Additional metadata
-```
-
-**Example Risk**:
-```json
-{
-  "risk_id": "RSK-001",
-  "title": "Inaccurate Customer Data",
-  "description": "Risk of regulatory penalties due to inaccurate customer identification data",
-  "risk_type": "compliance",
-  "severity": "high",
-  "likelihood": "medium",
-  "owner": "Compliance Department",
-  "source_table": "Table 3: Risk Register",
-  "metadata": {
-    "source_block": "chunk_023",
-    "last_reviewed": "2026-01-15"
-  }
-}
-```
-
-#### ControlComponent
-
-Represents a control measure or safeguard.
-
-```python
-class ControlComponent(BaseModel):
-    control_id: str             # Unique identifier (e.g., "CTL-001")
-    title: str                  # Control title
-    description: str            # Full control description
-    control_type: str           # Type of control (preventive, detective, corrective)
-    frequency: str              # Control frequency (daily, weekly, monthly, etc.)
-    owner: str                  # Control owner
-    automated: bool             # Whether control is automated
-    source_table: str           # Source table reference
-    metadata: Dict[str, Any]    # Additional metadata
-```
-
-**Example Control**:
-```json
-{
-  "control_id": "CTL-001",
-  "title": "Daily Data Quality Validation",
-  "description": "Automated validation of customer data accuracy against defined thresholds",
-  "control_type": "detective",
-  "frequency": "daily",
-  "owner": "Data Operations Team",
-  "automated": true,
-  "source_table": "Table 4: Control Framework",
-  "metadata": {
-    "source_block": "chunk_031",
-    "implementation_date": "2025-06-01"
+    "source_chunk_id": "chunk_42",
+    "source_location": "Section 2.3",
+    "schema_version": "1.0",
+    "prompt_version": "v2.1",
+    "extraction_iteration": 1
   }
 }
 ```
