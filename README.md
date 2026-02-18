@@ -3554,6 +3554,88 @@ def test_end_to_end_extraction():
         assert 0.0 <= req.confidence <= 1.0
 ```
 
+### LLM Provider Selection
+
+#### Choosing the Right Model
+
+**Anthropic Claude (Recommended for Quality)**:
+- ✅ Best accuracy for regulatory text
+- ✅ Better at following complex instructions
+- ✅ Excellent for schema discovery
+- ✅ Handles long documents well
+- ❌ Slightly slower
+- ❌ Higher cost per token
+
+**OpenAI GPT-4 (Recommended for Speed/Cost)**:
+- ✅ Faster response times
+- ✅ Lower cost per token
+- ✅ Good for simple extractions
+- ✅ Wide model selection (gpt-4, gpt-4o-mini)
+- ❌ May miss subtle requirements
+- ❌ Less consistent with complex schemas
+
+**Recommendations by Use Case**:
+- **Development/Testing**: Use GPT-4o-mini for speed and cost
+- **Production**: Use Claude Opus for maximum accuracy
+- **Schema Discovery**: Always use Claude (significantly better)
+- **Simple Documents**: GPT-4 is sufficient
+- **Complex/Critical Documents**: Use Claude Opus
+
+### Document Structure Optimization
+
+**For Best Results**:
+
+1. **Use Clear Headings**: Documents with clear heading hierarchy parse better
+   ```
+   ✅ Good:
+   Heading 1: Data Requirements
+     Heading 2: Quality Standards
+       Heading 3: Accuracy Threshold
+   
+   ❌ Poor:
+   All text with bold formatting, no heading styles
+   ```
+
+2. **Structure Tables Properly**: Use actual table elements, not formatted text
+   ```
+   ✅ Good: Word table with proper rows/columns
+   ❌ Poor: Text formatted to look like a table using spaces/tabs
+   ```
+
+3. **Be Explicit**: Regulatory language should be clear and unambiguous
+   ```
+   ✅ Good: "Institutions must maintain 95% accuracy"
+   ❌ Poor: "Institutions should aim for high accuracy"
+   ```
+
+4. **Include Context**: Provide section numbers and references
+   ```
+   ✅ Good: "Section 2.3: Customer name accuracy must be ≥95%"
+   ❌ Poor: "Accuracy must be high"
+   ```
+
+### Tuning Extraction Parameters
+
+**Adjust Chunk Sizes**:
+```bash
+# Smaller chunks (better for dense documents with short requirements)
+python -m src.cli preprocess --max-chunk-size 2000 --min-chunk-size 100
+
+# Larger chunks (better for narrative documents with long requirements)
+python -m src.cli preprocess --max-chunk-size 5000 --min-chunk-size 200
+```
+
+**Use Appropriate Modes**:
+- Use `--mode rules` for requirement documents
+- Use `--mode grc_components` for GRC libraries
+- Use `atomize` command for production-quality extraction with full evaluation
+
+**Enable Debug Mode for Troubleshooting**:
+```bash
+# See intermediate outputs and what the LLM actually returns
+python -m src.cli --debug atomize --provider anthropic --input document.docx
+```
+
 ## Understanding the Workflow
 
 This section explains how Kratos-discover processes documents from start to finish, helping you understand when to use each component.
@@ -3872,8 +3954,6 @@ python -m src.cli \
 # - validated_rules.json (post-validation)
 # - deduped_rules.json (after deduplication)
 ```
-
-## Agent1 Deterministic Preprocessor
 
 ## Agent1 Deterministic Preprocessor
 
@@ -4336,252 +4416,6 @@ Multi-stage validation ensures data quality:
 3. Data type and constraint checking
 4. Deduplication based on content similarity
 5. Source text verification
-
-## Best Practices and Tips
-
-This section provides practical guidance for getting the best results from Kratos-discover.
-
-### Choosing the Right LLM Provider
-
-**Anthropic Claude (Recommended for Quality)**:
-- ✅ Best accuracy for regulatory text
-- ✅ Better at following complex instructions
-- ✅ Excellent for schema discovery
-- ✅ Handles long documents well
-- ❌ Slightly slower
-- ❌ Higher cost per token
-
-**OpenAI GPT-4 (Recommended for Speed/Cost)**:
-- ✅ Faster response times
-- ✅ Lower cost per token
-- ✅ Good for simple extractions
-- ✅ Wide model selection (gpt-4, gpt-4o-mini)
-- ❌ May miss subtle requirements
-- ❌ Less consistent with complex schemas
-
-**Recommendation**:
-- **Development/Testing**: Use GPT-4o-mini for speed and cost
-- **Production**: Use Claude Opus for maximum accuracy
-- **Schema Discovery**: Always use Claude (significantly better)
-- **Simple Documents**: GPT-4 is sufficient
-- **Complex/Critical Documents**: Use Claude
-
-### Optimizing Document Structure
-
-**For Best Results**:
-
-1. **Use Clear Headings**: Documents with clear heading hierarchy parse better
-   ```
-   ✅ Good:
-   Heading 1: Data Requirements
-     Heading 2: Quality Standards
-       Heading 3: Accuracy Threshold
-   
-   ❌ Poor:
-   All text with bold formatting, no heading styles
-   ```
-
-2. **Structure Tables Properly**: Use actual table elements, not formatted text
-   ```
-   ✅ Good: Word table with proper rows/columns
-   ❌ Poor: Text formatted to look like a table using spaces/tabs
-   ```
-
-3. **Be Explicit**: Regulatory language should be clear and unambiguous
-   ```
-   ✅ Good: "Institutions must maintain 95% accuracy"
-   ❌ Poor: "Institutions should aim for high accuracy"
-   ```
-
-4. **Include Context**: Provide section numbers and references
-   ```
-   ✅ Good: "Section 2.3: Customer name accuracy must be ≥95%"
-   ❌ Poor: "Accuracy must be high"
-   ```
-
-### Tuning Extraction Quality
-
-**Adjust Chunk Sizes**:
-```bash
-# Smaller chunks (better for dense documents)
-python -m src.cli preprocess --max-chunk-size 2000 --min-chunk-size 100
-
-# Larger chunks (better for narrative documents)
-python -m src.cli preprocess --max-chunk-size 5000 --min-chunk-size 200
-```
-
-**Use Appropriate Modes**:
-- Use `--mode rules` for requirement documents
-- Use `--mode grc_components` for GRC libraries
-- Use `atomize` command for production extraction
-
-**Enable Debug Mode**:
-```bash
-# See what the LLM actually returns
-python -m src.cli --debug --dump-debug --provider openai
-```
-
-### Managing Costs
-
-**Cost Optimization Strategies**:
-
-1. **Start with Preprocessing** (No LLM cost):
-   ```bash
-   python -m src.cli preprocess --input doc.docx --output chunks.json
-   # Review chunks.json to ensure document parsed correctly
-   ```
-
-2. **Test with Small Documents First**:
-   ```bash
-   # Extract just the first few pages for testing
-   # Use Word to create a test document with first 5 pages
-   ```
-
-3. **Use Cheaper Models for Testing**:
-   ```bash
-   # Development
-   python -m src.cli --provider openai --model gpt-4o-mini
-   
-   # Production
-   python -m src.cli --provider anthropic --model claude-opus-4-20250805
-   ```
-
-4. **Cache Schema Discovery**:
-   - Schema discovery results are cached by document hash
-   - Re-running on same document reuses cached schema (saves LLM calls)
-
-5. **Batch Processing**:
-   ```bash
-   # Process multiple documents in one session
-   for doc in data/*.docx; do
-     python -m src.cli --provider openai --input "$doc" --output "results/$(basename $doc .docx).json"
-   done
-   ```
-
-### Handling Large Documents
-
-**For Documents Over 100 Pages**:
-
-1. **Increase Chunk Sizes**:
-   ```bash
-   python -m src.cli preprocess --max-chunk-size 5000
-   ```
-
-2. **Use Streaming** (if available):
-   - Set `temperature=0` for reproducibility
-   - Use `max_tokens=4000` or higher
-
-3. **Split Documents**:
-   - Process major sections separately
-   - Merge results afterward
-
-4. **Monitor Progress**:
-   ```bash
-   # Enable verbose logging
-   python -m src.cli --log-level INFO --provider anthropic
-   ```
-
-### Improving Accuracy
-
-**Strategies for Better Extraction**:
-
-1. **Use Prompt Versioning**:
-   ```bash
-   # Test different prompt versions
-   python -m src.cli --prompt-version v1.2
-   python -m src.cli --prompt-version v1.1
-   # Compare results
-   ```
-
-2. **Enable Grounding Verification**:
-   - RuleAgent automatically grounds rules against source text
-   - Agent1 atomizer includes multi-factor confidence scoring
-   - Review `grounded_in` field in output
-
-3. **Review Debug Outputs**:
-   ```bash
-   python -m src.cli --debug --dump-debug
-   # Check debug_*/raw_rules.json for LLM hallucinations
-   ```
-
-4. **Use Quality Evaluation**:
-   ```bash
-   python -m src.cli atomize  # Includes quality checks
-   # Review evaluation.json for quality metrics
-   ```
-
-5. **Set Confidence Thresholds**:
-   ```python
-   # In code, filter by confidence
-   rules = [r for r in rules if r.confidence >= 0.80]
-   ```
-
-### Common Pitfalls
-
-**❌ Don't**:
-- Use low-quality scanned PDFs (convert to DOCX first)
-- Process documents with complex layouts without preprocessing first
-- Ignore validation errors (they indicate real issues)
-- Use tiny chunk sizes (<50 chars) or huge chunk sizes (>10,000 chars)
-- Skip schema discovery for unfamiliar document formats
-- Ignore quality evaluation results in production
-
-**✅ Do**:
-- Use native DOCX format when possible
-- Preprocess documents first to verify structure
-- Review validation errors and fix source documents
-- Use appropriate chunk sizes for your document type (2000-5000 chars)
-- Run schema discovery on new document types
-- Review quality evaluation and address critical issues
-
-### Production Deployment Checklist
-
-Before deploying to production:
-
-- [ ] Test with representative sample documents
-- [ ] Run full atomization pipeline with quality checks
-- [ ] Review confidence thresholds (adjust if needed)
-- [ ] Set up monitoring/logging
-- [ ] Configure appropriate LLM model (Claude for production)
-- [ ] Set up error handling and retry logic
-- [ ] Cache schema discovery results
-- [ ] Document expected input formats
-- [ ] Create validation tests for output
-- [ ] Set up alerts for quality score drops
-
-### Debugging Common Issues
-
-**Issue: "No rules extracted"**
-```bash
-# Check preprocessing
-python -m src.cli preprocess --input doc.docx --output chunks.json
-# Review chunks.json - are there meaningful chunks?
-
-# Check with debug mode
-python -m src.cli --debug --dump-debug --provider openai
-# Review debug_*/raw_rules.json - what did LLM return?
-```
-
-**Issue: "Low confidence scores"**
-```bash
-# Try different LLM provider
-python -m src.cli --provider anthropic  # Usually more accurate
-
-# Check schema discovery
-python -m src.cli discover-schema --input doc.docx --provider anthropic
-# Low schema confidence indicates document structure issues
-```
-
-**Issue: "Too many duplicate rules"**
-- Document may have repetitive content
-- Deduplication threshold may be too low
-- Review `deduped_rules.json` in debug mode
-
-**Issue: "Rules not grounded in source"**
-- LLM is hallucinating
-- Switch to Claude (better grounding)
-- Try different prompt version
-- Check source document for ambiguity
 
 ## Troubleshooting
 
