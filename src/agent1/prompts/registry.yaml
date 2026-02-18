@@ -3,11 +3,11 @@
 
 prompts:
   schema_discovery:
-    current_version: "v1"
+    current_version: "v1.0"
     versions:
-      v1:
-        file: "schema_discovery_v1.yaml"
-        description: "Initial schema discovery prompt"
+      v1.0:
+        file: "schema_discovery/v1.0.yaml"
+        description: "Schema discovery prompt for GRC document analysis"
 
   requirement_atomizer:
     current_version: "v1.0"

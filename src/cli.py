@@ -548,14 +548,14 @@ def run_schema_discovery(
         schema_map.structural_pattern,
     )
 
-    # Step 4: Check confidence gate
+    # Step 4: Check confidence gate (CF-8: structured decision)
     gate_result = check_confidence(state | {"schema_map": schema_map})
-    logger.info("[confidence_gate] decision=%s", gate_result)
+    logger.info("[confidence_gate] decision=%s score=%.3f", gate_result.decision, gate_result.score)
 
     # Step 5: Save output
     payload = {
         "schema_map": schema_map.model_dump(),
-        "gate_decision": gate_result,
+        "gate_decision": gate_result.to_dict(),
         "preprocessor_stats": preprocessor_output.document_stats,
     }
     text = json.dumps(payload, indent=2)
@@ -625,13 +625,21 @@ def run_atomizer(
         schema_map.avg_confidence * 100,
     )
 
-    # Node 3: Confidence Gate
+    # Node 3: Confidence Gate (CF-8: structured decision)
     state["schema_map"] = schema_map
     gate_result = check_confidence(state)
-    logger.info("[node3] confidence_gate decision=%s", gate_result)
+    logger.info(
+        "[node3] confidence_gate decision=%s score=%.3f",
+        gate_result.decision,
+        gate_result.score,
+    )
+    if gate_result.failing_checks:
+        logger.warning("[node3] failing_checks=%s", gate_result.failing_checks)
+    if gate_result.conditional_flags:
+        logger.info("[node3] conditional_flags=%s", gate_result.conditional_flags)
 
-    if gate_result == "reject":
-        logger.error("[node3] confidence_gate rejected schema")
+    if gate_result.decision == "reject":
+        logger.error("[node3] confidence_gate rejected: %s", gate_result.rationale)
         return 1
 
     # Node 4: Requirement Atomizer
@@ -670,7 +678,7 @@ def run_atomizer(
         "extraction_metadata": extraction_metadata.model_dump() if extraction_metadata else {},
         "eval_report": eval_report,
         "schema_map": schema_map.model_dump(),
-        "gate_decision": gate_result,
+        "gate_decision": gate_result.to_dict(),  # CF-8: Structured decision
         "preprocessor_stats": preprocessor_output.document_stats,
     }
     text = json.dumps(payload, indent=2)

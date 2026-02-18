@@ -23,6 +23,8 @@ rule_types:
         threshold_value: 99.5
         threshold_unit: "percent"
         threshold_direction: "minimum"
+        applicable_fields: ["account_number", "account_holder_name", "balance"]
+        data_source: "core_banking_system.deposit_accounts"
 
   ownership_category:
     description: "Account ownership classification with required data elements for that ORC"
@@ -136,6 +138,9 @@ instructions: |
   - grounded_in: verbatim text from source
   - confidence: float 0.70-0.99 (minimum 0.70 for retry pass)
   - attributes: object with type-specific fields (see examples above)
+    IMPORTANT: For ALL rule types, also extract these fields when mentioned in the source:
+    - applicable_fields: array of specific field/column names this rule applies to (e.g., ["account_number", "ssn", "balance"])
+    - data_source: the source system, table, or file this rule references (e.g., "core_banking.accounts", "CIF_extract")
   - source_chunk_id: the chunk ID this requirement was extracted from
 
 user_message_template: |

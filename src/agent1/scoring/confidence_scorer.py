@@ -27,7 +27,16 @@ from agent1.models.canonical_schemas import (
 
 @dataclass
 class ConfidenceFeatures:
-    """Breakdown of confidence score components."""
+    """Breakdown of confidence score components.
+    
+    Score Transform:
+    - raw_total: Sum of all feature scores (0.0 to 1.0)
+    - total: Clamped to [0.50, 0.99] range
+    
+    The floor of 0.50 ensures even poorly-grounded requirements
+    get a baseline score for downstream processing. The ceiling
+    of 0.99 reserves 1.0 for human-verified requirements.
+    """
     grounding_match: float = 0.0
     completeness: float = 0.0
     quantification: float = 0.0
@@ -36,9 +45,9 @@ class ConfidenceFeatures:
     domain_signals: float = 0.0
     
     @property
-    def total(self) -> float:
-        """Sum of all feature scores, capped at 0.99."""
-        raw = (
+    def raw_total(self) -> float:
+        """Raw sum of all feature scores (no floor/ceiling)."""
+        return (
             self.grounding_match +
             self.completeness +
             self.quantification +
@@ -46,7 +55,11 @@ class ConfidenceFeatures:
             self.coherence +
             self.domain_signals
         )
-        return min(0.99, max(0.50, raw))
+    
+    @property
+    def total(self) -> float:
+        """Clamped score: floor=0.50, ceiling=0.99."""
+        return min(0.99, max(0.50, self.raw_total))
     
     def to_dict(self) -> dict[str, float]:
         return {
@@ -56,6 +69,7 @@ class ConfidenceFeatures:
             "schema_compliance": round(self.schema_compliance, 3),
             "coherence": round(self.coherence, 3),
             "domain_signals": round(self.domain_signals, 3),
+            "raw_total": round(self.raw_total, 3),
         }
 
 
@@ -67,14 +81,22 @@ class ConfidenceResult:
     rationale: str
     grounding_classification: str  # EXACT, PARAPHRASE, INFERENCE
     grounding_evidence: dict[str, Any] = field(default_factory=dict)
+    requires_manual_review: bool = False  # CF-11: INFERENCE + jaccard < 0.30
+    
+    @property
+    def raw_score(self) -> float:
+        """Raw score before floor/ceiling transform."""
+        return self.features.raw_total
     
     def to_dict(self) -> dict[str, Any]:
         return {
             "confidence": round(self.score, 2),
+            "confidence_raw": round(self.raw_score, 3),
             "confidence_features": self.features.to_dict(),
             "confidence_rationale": self.rationale,
             "grounding_classification": self.grounding_classification,
             "grounding_evidence": self.grounding_evidence,
+            "requires_manual_review": self.requires_manual_review,
         }
 
 
@@ -344,20 +366,30 @@ def _compute_domain_signals(requirement: RegulatoryRequirement) -> float:
     return 0.0
 
 
-def _classify_grounding(grounding_score: float, features: ConfidenceFeatures) -> str:
+def _classify_grounding(grounding_score: float, features: ConfidenceFeatures, grounding_evidence: dict) -> tuple[str, bool]:
     """
     Classify grounding quality based on score.
     
-    - EXACT: >0.85 total or grounding_match >= 0.25
-    - PARAPHRASE: 0.60-0.85 or grounding_match 0.15-0.25
-    - INFERENCE: <0.60 or grounding_match < 0.15
+    Returns: (classification, requires_manual_review)
+    
+    Classifications:
+    - EXACT: grounding_match >= 0.25
+    - PARAPHRASE: grounding_match 0.15-0.25
+    - INFERENCE: grounding_match < 0.15
+    
+    Manual review required if INFERENCE + jaccard < 0.30 (CF-11)
     """
+    jaccard = grounding_evidence.get("jaccard_score", 0.0)
+    
     if features.grounding_match >= 0.25:
-        return "EXACT"
+        return "EXACT", False
     elif features.grounding_match >= 0.15:
-        return "PARAPHRASE"
+        return "PARAPHRASE", False
     else:
-        return "INFERENCE"
+        # INFERENCE classification
+        # CF-11: Flag for manual review if jaccard < 0.30
+        requires_review = jaccard < 0.30
+        return "INFERENCE", requires_review
 
 
 def _build_rationale(features: ConfidenceFeatures, grounding_evidence: dict) -> str:
@@ -432,8 +464,10 @@ def score_requirement(requirement: RegulatoryRequirement) -> ConfidenceResult:
         domain_signals=_compute_domain_signals(requirement),
     )
     
-    # Classify grounding
-    classification = _classify_grounding(features.total, features)
+    # Classify grounding (CF-11: returns manual review flag)
+    classification, requires_review = _classify_grounding(
+        features.total, features, grounding_evidence
+    )
     
     # Apply penalty for INFERENCE classification
     final_score = features.total
@@ -443,12 +477,17 @@ def score_requirement(requirement: RegulatoryRequirement) -> ConfidenceResult:
     # Build rationale
     rationale = _build_rationale(features, grounding_evidence)
     
+    # Add manual review note to rationale if flagged
+    if requires_review:
+        rationale += " MANUAL REVIEW REQUIRED: INFERENCE with jaccard < 0.30."
+    
     return ConfidenceResult(
         score=round(final_score, 2),
         features=features,
         rationale=rationale,
         grounding_classification=classification,
         grounding_evidence=grounding_evidence,
+        requires_manual_review=requires_review,
     )
 
 

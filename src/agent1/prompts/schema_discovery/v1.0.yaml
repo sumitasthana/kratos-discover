@@ -1,0 +1,78 @@
+version: "1.0"
+name: schema_discovery
+description: Schema discovery prompt for GRC document analysis
+
+role: |
+  You are a schema discovery expert analyzing a GRC (Governance, Risk, Compliance) document.
+
+instructions: |
+  ## GROUND TRUTH FROM PARSER (use these exact counts and field labels):
+
+  ENTITY COUNTS (from document annotations):
+  {entity_stats_text}
+
+  FIELD LABELS EXTRACTED FROM TABLES (use these exact labels, do NOT invent fields):
+  {extracted_fields_text}
+
+  ## DOCUMENT CHUNKS (samples from each entity type):
+
+  {chunks_text}
+
+  ## YOUR TASK:
+
+  Create a schema map for this document. You MUST:
+  1. Include ALL entity types listed above (Policy, Control, Risk, etc.)
+  2. Use the EXACT field labels extracted from tables - do NOT invent field names
+  3. Use the EXACT record counts from the parser annotations
+  4. For each field, provide:
+     - mapping_rationale: explain WHY this field maps to the canonical name
+     - example_values: include 1-2 actual values from the chunks above
+  5. For anomalies, be SPECIFIC: name the exact record IDs and fields affected
+
+  Return ONLY valid JSON (no markdown, no explanation):
+
+  {json_example}
+
+  CONSTRAINTS:
+  - inferred_type: identifier, text, date, enum, composite_enum, reference_list, number, boolean, person_or_role, list, unknown
+  - structural_pattern: vertical_key_value_tables, horizontal_tables, section_based_prose, flat_spreadsheet, mixed, unknown
+  - inferred_document_category: grc_library, regulatory, data_dictionary, unknown
+  - relationships: LEAVE AS EMPTY ARRAY [] - do not add relationships
+  - unmapped_fields: list of field name strings that couldn't be mapped
+  - anomalies: list of SPECIFIC descriptions with record IDs
+
+  CRITICAL: 
+  1. Only use field labels that appear in the FIELD LABELS EXTRACTED section above. Do NOT hallucinate fields.
+  2. You MUST include ALL entity types from the ENTITY COUNTS section (Policy, Control, Risk).
+  3. Leave relationships as empty array [].
+
+json_example_template: |
+  {
+    "document_format": "docx",
+    "structural_pattern": "vertical_key_value_tables",
+    "structural_confidence": 0.85,
+    "inferred_document_category": "grc_library",
+    "entities": [
+      {
+        "discovered_label": "Control",
+        "identifier_field": "control_id",
+        "record_count": {control_record_count},
+        "fields": [
+          {
+            "raw_label": "Control ID",
+            "canonical_field": "control_id",
+            "inferred_type": "identifier",
+            "confidence": 0.95,
+            "mapping_rationale": "Field labeled 'Control ID' contains unique identifiers like C-001",
+            "example_values": ["C-001", "C-002"]
+          }
+        ]
+      }
+    ],
+    "relationships": [],
+    "unmapped_fields": [],
+    "anomalies": ["Specific anomaly: Record C-005 missing field X"],
+    "total_records_estimated": {total_records},
+    "schema_version": "",
+    "avg_confidence": 0.85
+  }
