@@ -1,6 +1,6 @@
 # kratos-discover
 
-Production-grade document processing system built with LangGraph for automated extraction and analysis of regulatory compliance documents.
+Production-grade regulatory requirement extraction system built with LangGraph for automated extraction and analysis of compliance documents.
 
 ## Table of Contents
 
@@ -1347,7 +1347,7 @@ The `RegulatoryRequirement` model represents a single extracted requirement from
 
 ```python
 class RegulatoryRequirement(BaseModel):
-    requirement_id: str             # Unique identifier (e.g., "R-DQ-a1b2c3")
+    requirement_id: str             # Unique identifier format: R-{TYPE_CODE}-{HASH6}
     rule_type: RuleType             # Type of requirement (see RuleType enum)
     rule_description: str           # Plain-English statement of the obligation
     grounded_in: str                # Verbatim text from source that supports this requirement
