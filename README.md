@@ -1058,33 +1058,546 @@ To switch prompt versions, either:
 
 ## Data Models
 
+Kratos-discover uses Pydantic models for type safety, validation, and serialization. This section describes the key data models used throughout the system.
+
 ### Rule Model
+
+The `Rule` model represents a single extracted regulatory rule or requirement from the RuleAgent pipeline.
 
 ```python
 class Rule(BaseModel):
-    rule_id: str
-    category: RuleCategory  # rule, control, risk
-    rule_type: RuleType     # data_quality_threshold, ownership_category, etc.
-    rule_description: str
-    grounded_in: str
-    confidence: float       # 0.5 to 0.99
-    attributes: Dict[str, Any]
-    metadata: RuleMetadata
+    rule_id: str                    # Unique identifier (e.g., "DQ-001", "OWN-002")
+    category: RuleCategory          # "rule", "control", or "risk"
+    rule_type: RuleType             # Type of requirement (see RuleType enum)
+    rule_description: str           # Human-readable description of the rule
+    grounded_in: str                # Source text that validates this rule
+    confidence: float               # Confidence score from 0.5 to 0.99
+    attributes: Dict[str, Any]      # Additional structured attributes
+    metadata: RuleMetadata          # Source information and extraction metadata
 ```
 
-### GRC Components
+**Example Rule**:
+```json
+{
+  "rule_id": "DQ-001",
+  "category": "rule",
+  "rule_type": "data_quality_threshold",
+  "rule_description": "Customer name accuracy must be at least 95%",
+  "grounded_in": "Section 2.3 states that institutions must maintain customer name records with a minimum accuracy threshold of 95 percent.",
+  "confidence": 0.87,
+  "attributes": {
+    "threshold": "95%",
+    "metric": "accuracy",
+    "applies_to": "customer name",
+    "enforcement": "required"
+  },
+  "metadata": {
+    "source_section": "Section 2.3",
+    "document_location": "page 12",
+    "extraction_timestamp": "2026-02-18T03:10:36Z"
+  }
+}
+```
 
-- **PolicyComponent**: Represents organizational policies
-- **RiskComponent**: Represents identified risks
-- **ControlComponent**: Represents control measures
+### GRC Component Models
 
-Each component includes:
-- Unique identifier
-- Description/title
-- Owner information
-- Source table reference
-- Validation status
-- Metadata (source block, location)
+The GRC (Governance, Risk, Compliance) models represent organizational policies, risks, and controls.
+
+#### PolicyComponent
+
+Represents an organizational policy or governance requirement.
+
+```python
+class PolicyComponent(BaseModel):
+    policy_id: str              # Unique identifier (e.g., "POL-001")
+    title: str                  # Policy title
+    description: str            # Full policy description
+    owner: str                  # Policy owner (department/role)
+    category: str               # Policy category
+    source_table: str           # Source table reference
+    validation_status: str      # Validation status
+    metadata: Dict[str, Any]    # Additional metadata
+```
+
+**Example Policy**:
+```json
+{
+  "policy_id": "POL-001",
+  "title": "Customer Data Quality Policy",
+  "description": "All customer records must meet minimum data quality standards",
+  "owner": "Data Governance Team",
+  "category": "data_management",
+  "source_table": "Table 2: Policy Requirements",
+  "validation_status": "validated",
+  "metadata": {
+    "source_block": "chunk_015",
+    "effective_date": "2025-01-01"
+  }
+}
+```
+
+#### RiskComponent
+
+Represents an identified risk or risk statement.
+
+```python
+class RiskComponent(BaseModel):
+    risk_id: str                # Unique identifier (e.g., "RSK-001")
+    title: str                  # Risk title
+    description: str            # Full risk description
+    risk_type: str              # Type of risk (operational, compliance, etc.)
+    severity: str               # Risk severity (high, medium, low)
+    likelihood: str             # Likelihood (high, medium, low)
+    owner: str                  # Risk owner
+    source_table: str           # Source table reference
+    metadata: Dict[str, Any]    # Additional metadata
+```
+
+**Example Risk**:
+```json
+{
+  "risk_id": "RSK-001",
+  "title": "Inaccurate Customer Data",
+  "description": "Risk of regulatory penalties due to inaccurate customer identification data",
+  "risk_type": "compliance",
+  "severity": "high",
+  "likelihood": "medium",
+  "owner": "Compliance Department",
+  "source_table": "Table 3: Risk Register",
+  "metadata": {
+    "source_block": "chunk_023",
+    "last_reviewed": "2026-01-15"
+  }
+}
+```
+
+#### ControlComponent
+
+Represents a control measure or safeguard.
+
+```python
+class ControlComponent(BaseModel):
+    control_id: str             # Unique identifier (e.g., "CTL-001")
+    title: str                  # Control title
+    description: str            # Full control description
+    control_type: str           # Type of control (preventive, detective, corrective)
+    frequency: str              # Control frequency (daily, weekly, monthly, etc.)
+    owner: str                  # Control owner
+    automated: bool             # Whether control is automated
+    source_table: str           # Source table reference
+    metadata: Dict[str, Any]    # Additional metadata
+```
+
+**Example Control**:
+```json
+{
+  "control_id": "CTL-001",
+  "title": "Daily Data Quality Validation",
+  "description": "Automated validation of customer data accuracy against defined thresholds",
+  "control_type": "detective",
+  "frequency": "daily",
+  "owner": "Data Operations Team",
+  "automated": true,
+  "source_table": "Table 4: Control Framework",
+  "metadata": {
+    "source_block": "chunk_031",
+    "implementation_date": "2025-06-01"
+  }
+}
+```
+
+### Agent1 Data Models
+
+Agent1 uses additional specialized models for its advanced processing pipeline.
+
+#### ContentChunk
+
+Represents a single chunk of parsed document content.
+
+```python
+class ContentChunk(BaseModel):
+    chunk_id: str               # Unique identifier (e.g., "chunk_001")
+    chunk_type: str             # "prose", "heading", "list", or "table"
+    text: str                   # The actual content text
+    metadata: Dict[str, Any]    # Additional metadata (page, heading, table_data)
+```
+
+**Example Chunk**:
+```json
+{
+  "chunk_id": "chunk_042",
+  "chunk_type": "table",
+  "text": "Requirement ID | Description | Owner\nREQ-001 | Data quality checks | Data Team",
+  "metadata": {
+    "page": 5,
+    "heading_context": "Data Quality Requirements",
+    "table_data": [
+      ["Requirement ID", "Description", "Owner"],
+      ["REQ-001", "Data quality checks", "Data Team"]
+    ]
+  }
+}
+```
+
+#### RegulatoryRequirement
+
+Represents a single extracted regulatory requirement from Agent1's atomizer.
+
+```python
+class RegulatoryRequirement(BaseModel):
+    requirement_id: str         # Unique identifier with type code (e.g., "DQ-001")
+    rule_type: RuleType         # Type from shared.models.RuleType enum
+    category: RuleCategory      # Category from shared.models.RuleCategory enum
+    description: str            # Human-readable requirement description
+    grounded_in: str            # Source text excerpt
+    confidence: float           # Confidence score (0.0 to 1.0)
+    attributes: Dict[str, Any]  # Structured attributes
+    metadata: Dict[str, Any]    # Extraction metadata
+```
+
+**Example Requirement**:
+```json
+{
+  "requirement_id": "BO-003",
+  "rule_type": "beneficial_ownership_threshold",
+  "category": "rule",
+  "description": "Beneficial ownership must be identified for individuals owning 25% or more",
+  "grounded_in": "Section 4.2: Any individual with 25 percent or greater ownership stake must be identified as a beneficial owner.",
+  "confidence": 0.92,
+  "attributes": {
+    "threshold_percentage": 25,
+    "applies_to": "beneficial owners",
+    "identification_required": true
+  },
+  "metadata": {
+    "source_chunk_id": "chunk_078",
+    "extraction_timestamp": "2026-02-18T03:10:36Z",
+    "confidence_factors": {
+      "grounding_match": 0.95,
+      "completeness": 0.90,
+      "quantification": 1.0,
+      "schema_compliance": 0.88,
+      "coherence": 0.92,
+      "domain_signals": 0.85
+    }
+  }
+}
+```
+
+#### SchemaMap
+
+Represents the discovered structure of a document from Agent1's schema discovery.
+
+```python
+class SchemaMap(BaseModel):
+    structural_pattern: str                 # Document pattern type
+    entities: List[DiscoveredEntity]        # Discovered logical entities
+    relationships: List[Dict[str, Any]]     # Entity relationships
+    anomalies: List[str]                    # Detected structural issues
+    confidence_avg: float                   # Average confidence across all fields
+```
+
+**Example SchemaMap**:
+```json
+{
+  "structural_pattern": "vertical_table",
+  "entities": [
+    {
+      "name": "Data Quality Requirements",
+      "entity_type": "table",
+      "fields": [
+        {
+          "name": "requirement_id",
+          "confidence": 0.95,
+          "data_type": "string",
+          "examples": ["DQ-001", "DQ-002", "DQ-003"]
+        },
+        {
+          "name": "threshold",
+          "confidence": 0.88,
+          "data_type": "percentage",
+          "examples": ["95%", "99%", "90%"]
+        }
+      ]
+    }
+  ],
+  "relationships": [],
+  "anomalies": ["Missing header in section 3"],
+  "confidence_avg": 0.87
+}
+```
+
+### Enum Types (from shared.models)
+
+#### RuleCategory
+
+```python
+class RuleCategory(str, Enum):
+    RULE = "rule"           # Regulatory rule or requirement
+    CONTROL = "control"     # Control measure or safeguard
+    RISK = "risk"           # Risk statement or concern
+```
+
+#### RuleType
+
+```python
+class RuleType(str, Enum):
+    # Core types (used by Agent1)
+    DATA_QUALITY_THRESHOLD = "data_quality_threshold"
+    OWNERSHIP_CATEGORY = "ownership_category"
+    BENEFICIAL_OWNERSHIP_THRESHOLD = "beneficial_ownership_threshold"
+    DOCUMENTATION_REQUIREMENT = "documentation_requirement"
+    UPDATE_REQUIREMENT = "update_requirement"
+    UPDATE_TIMELINE = "update_timeline"
+    
+    # Extended types (used by RuleAgent GRC mode)
+    CONTROL_REQUIREMENT = "control_requirement"
+    RISK_STATEMENT = "risk_statement"
+```
+
+### Model Validation
+
+All models use Pydantic for automatic validation:
+
+- **Type Checking**: Ensures fields have correct types
+- **Required Fields**: Validates presence of mandatory fields
+- **Constraints**: Enforces value ranges (e.g., confidence 0.5-0.99)
+- **Custom Validators**: Applies business logic validation
+
+**Example Validation Error**:
+```python
+# This will raise ValidationError
+rule = Rule(
+    rule_id="DQ-001",
+    category="invalid_category",  # ❌ Not in RuleCategory enum
+    rule_type="data_quality_threshold",
+    rule_description="...",
+    grounded_in="...",
+    confidence=1.5,  # ❌ Must be between 0.5 and 0.99
+    attributes={},
+    metadata={}
+)
+```
+
+## Understanding the Workflow
+
+This section explains how Kratos-discover processes documents from start to finish, helping you understand when to use each component.
+
+### Workflow 1: Simple Rule Extraction
+
+**Use Case**: Extract regulatory rules from a compliance document quickly.
+
+**Steps**:
+1. You provide a DOCX document
+2. RuleAgent segments it into logical sections (using Agent1 preprocessor)
+3. Each section is sent to LLM with rule extraction prompts
+4. LLM returns structured rules in JSON format
+5. Rules are validated against Pydantic schemas
+6. Duplicate rules are removed
+7. Each rule is grounded against source text
+8. Final validated rules are returned
+
+**When to Use**: When you need quick extraction of rules without advanced quality checks.
+
+**Command**:
+```bash
+python -m src.cli --provider openai --mode rules --input doc.docx --output rules.json
+```
+
+### Workflow 2: GRC Component Extraction
+
+**Use Case**: Extract policies, risks, and controls from GRC documents.
+
+**Steps**:
+1. You provide a GRC library document (e.g., FDIC 370)
+2. RuleAgent segments document into sections
+3. Each section is analyzed for GRC components
+4. LLM extracts policies, risks, and controls separately
+5. Each component type is validated against its schema
+6. Components are deduplicated
+7. Components are grounded against source text
+8. Final components are returned grouped by type
+
+**When to Use**: When working with structured GRC documents that contain policies, risks, and controls.
+
+**Command**:
+```bash
+python -m src.cli --provider openai --mode grc_components --input grc_doc.docx --output grc.json
+```
+
+### Workflow 3: Document Preprocessing Only
+
+**Use Case**: Parse document structure without LLM costs, for inspection or debugging.
+
+**Steps**:
+1. You provide a DOCX document
+2. Agent1 preprocessor parses document deterministically
+3. Document is split into chunks (headings, prose, lists, tables)
+4. Each chunk gets a unique ID
+5. Table structures are preserved
+6. Document statistics are calculated
+7. Chunks and stats are returned
+
+**When to Use**: 
+- Inspecting document structure before extraction
+- Debugging parsing issues
+- Creating input for custom processing
+- Avoiding LLM costs for initial analysis
+
+**Command**:
+```bash
+python -m src.cli preprocess --input doc.docx --output chunks.json
+```
+
+### Workflow 4: Schema Discovery
+
+**Use Case**: Understand document structure before extraction.
+
+**Steps**:
+1. Document is preprocessed into chunks
+2. Sample chunks are sent to LLM (Claude recommended)
+3. LLM analyzes structure and identifies entities/fields
+4. Schema map is created with confidence scores
+5. Structural pattern is identified (vertical_table, prose_with_tables, etc.)
+6. Relationships and anomalies are detected
+7. Schema map is returned
+
+**When to Use**:
+- Before running full extraction on unfamiliar documents
+- Understanding document organization
+- Debugging extraction issues
+- Validating document format
+
+**Command**:
+```bash
+python -m src.cli discover-schema --input doc.docx --provider anthropic --output schema.json
+```
+
+### Workflow 5: Advanced Atomization (Full Pipeline)
+
+**Use Case**: Extract requirements with comprehensive quality assurance.
+
+**Steps**:
+1. **Node 1 - Preprocessing**: Document parsed into chunks (deterministic)
+2. **Node 2 - Schema Discovery**: Structure inferred with LLM
+3. **Node 3 - Confidence Gate**: Schema quality validated
+   - If confidence < 0.50: Pipeline stops (reject)
+   - If confidence 0.50-0.85: Proceeds with warning (human_review)
+   - If confidence ≥ 0.85: Proceeds automatically (auto_accept)
+4. **Node 4 - Atomization**: Requirements extracted with confidence scoring
+   - Each requirement scored on 6 factors
+   - Requirements below threshold filtered out
+5. **Node 5 - Quality Evaluation**: Six quality checks run
+   - Grounding check (hallucination prevention)
+   - Testability check (vague language detection)
+   - Hallucination check (fabricated data detection)
+   - Deduplication check (duplicate detection)
+   - Schema compliance check (schema validation)
+   - Coverage analysis (extraction completeness)
+6. Results returned with quality report
+
+**When to Use**:
+- Production extraction with quality guarantees
+- Processing mission-critical compliance documents
+- When you need detailed quality metrics
+- When hallucination prevention is essential
+
+**Command**:
+```bash
+python -m src.cli atomize --input doc.docx --provider anthropic --output-dir ./results/
+```
+
+**Output Files**:
+- `results/requirements.json`: Extracted requirements
+- `results/evaluation.json`: Quality assessment report
+- `results/schema.json`: Discovered document schema
+
+### Workflow Comparison
+
+| Feature | Simple Rules | GRC Extraction | Preprocessing | Schema Discovery | Atomization |
+|---------|--------------|----------------|---------------|------------------|-------------|
+| **LLM Required** | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
+| **Speed** | Fast | Fast | Very Fast | Fast | Slower |
+| **Quality Checks** | Basic | Basic | None | N/A | Comprehensive |
+| **Confidence Scoring** | Yes | Yes | N/A | Yes | Multi-factor |
+| **Grounding Verification** | Yes | Yes | N/A | N/A | Yes + Extra Checks |
+| **Deduplication** | Yes | Yes | N/A | N/A | Yes |
+| **Schema Validation** | Yes | Yes | N/A | Yes | Yes + Compliance Check |
+| **Quality Report** | No | No | No | No | ✅ Yes |
+| **Best For** | Quick extraction | GRC documents | Inspection | Structure analysis | Production use |
+
+### Choosing the Right Workflow
+
+**Choose Simple Rule Extraction when**:
+- You need quick results
+- Document format is well-understood
+- Basic quality checks are sufficient
+- Cost/speed is priority over comprehensive validation
+
+**Choose GRC Component Extraction when**:
+- Working with GRC library documents
+- Need separate policies, risks, and controls
+- Document has structured GRC sections
+- Following GRC standards (like FDIC 370)
+
+**Choose Preprocessing when**:
+- Inspecting document structure first
+- Debugging parsing issues
+- Building custom processing pipeline
+- Avoiding LLM costs for exploration
+
+**Choose Schema Discovery when**:
+- Working with unfamiliar document formats
+- Need to understand structure before extraction
+- Planning extraction strategy
+- Validating document format
+
+**Choose Advanced Atomization when**:
+- Processing production/critical documents
+- Need comprehensive quality assurance
+- Hallucination prevention is essential
+- Want detailed quality metrics
+- Budget allows for thorough processing
+
+### Common Patterns
+
+#### Pattern 1: Exploration → Extraction
+```bash
+# Step 1: Explore structure (no LLM cost)
+python -m src.cli preprocess --input doc.docx --output chunks.json
+
+# Step 2: Understand schema (small LLM cost)
+python -m src.cli discover-schema --input doc.docx --provider anthropic --output schema.json
+
+# Step 3: Extract with full pipeline (higher cost, highest quality)
+python -m src.cli atomize --input doc.docx --provider anthropic --output-dir ./results/
+```
+
+#### Pattern 2: Quick Iteration
+```bash
+# Start with simple extraction for speed
+python -m src.cli --provider openai --input doc.docx --output rules_v1.json
+
+# Review results, then run with GRC mode if needed
+python -m src.cli --mode grc_components --provider openai --input doc.docx --output grc_v1.json
+
+# Finally, run full pipeline for production
+python -m src.cli atomize --input doc.docx --provider anthropic --output-dir ./production/
+```
+
+#### Pattern 3: Debug Mode Investigation
+```bash
+# Run with debug mode to see intermediate outputs
+python -m src.cli --debug --dump-debug --provider openai --input doc.docx
+
+# Inspect debug directory
+ls -la debug_*
+
+# Review intermediate files
+cat debug_*/raw_rules.json      # Initial LLM output
+cat debug_*/validated_rules.json # After validation
+cat debug_*/deduped_rules.json  # After deduplication
+```
 
 ## Development
 
@@ -1648,6 +2161,252 @@ Multi-stage validation ensures data quality:
 3. Data type and constraint checking
 4. Deduplication based on content similarity
 5. Source text verification
+
+## Best Practices and Tips
+
+This section provides practical guidance for getting the best results from Kratos-discover.
+
+### Choosing the Right LLM Provider
+
+**Anthropic Claude (Recommended for Quality)**:
+- ✅ Best accuracy for regulatory text
+- ✅ Better at following complex instructions
+- ✅ Excellent for schema discovery
+- ✅ Handles long documents well
+- ❌ Slightly slower
+- ❌ Higher cost per token
+
+**OpenAI GPT-4 (Recommended for Speed/Cost)**:
+- ✅ Faster response times
+- ✅ Lower cost per token
+- ✅ Good for simple extractions
+- ✅ Wide model selection (gpt-4, gpt-4o-mini)
+- ❌ May miss subtle requirements
+- ❌ Less consistent with complex schemas
+
+**Recommendation**:
+- **Development/Testing**: Use GPT-4o-mini for speed and cost
+- **Production**: Use Claude Opus for maximum accuracy
+- **Schema Discovery**: Always use Claude (significantly better)
+- **Simple Documents**: GPT-4 is sufficient
+- **Complex/Critical Documents**: Use Claude
+
+### Optimizing Document Structure
+
+**For Best Results**:
+
+1. **Use Clear Headings**: Documents with clear heading hierarchy parse better
+   ```
+   ✅ Good:
+   Heading 1: Data Requirements
+     Heading 2: Quality Standards
+       Heading 3: Accuracy Threshold
+   
+   ❌ Poor:
+   All text with bold formatting, no heading styles
+   ```
+
+2. **Structure Tables Properly**: Use actual table elements, not formatted text
+   ```
+   ✅ Good: Word table with proper rows/columns
+   ❌ Poor: Text formatted to look like a table using spaces/tabs
+   ```
+
+3. **Be Explicit**: Regulatory language should be clear and unambiguous
+   ```
+   ✅ Good: "Institutions must maintain 95% accuracy"
+   ❌ Poor: "Institutions should aim for high accuracy"
+   ```
+
+4. **Include Context**: Provide section numbers and references
+   ```
+   ✅ Good: "Section 2.3: Customer name accuracy must be ≥95%"
+   ❌ Poor: "Accuracy must be high"
+   ```
+
+### Tuning Extraction Quality
+
+**Adjust Chunk Sizes**:
+```bash
+# Smaller chunks (better for dense documents)
+python -m src.cli preprocess --max-chunk-size 2000 --min-chunk-size 100
+
+# Larger chunks (better for narrative documents)
+python -m src.cli preprocess --max-chunk-size 5000 --min-chunk-size 200
+```
+
+**Use Appropriate Modes**:
+- Use `--mode rules` for requirement documents
+- Use `--mode grc_components` for GRC libraries
+- Use `atomize` command for production extraction
+
+**Enable Debug Mode**:
+```bash
+# See what the LLM actually returns
+python -m src.cli --debug --dump-debug --provider openai
+```
+
+### Managing Costs
+
+**Cost Optimization Strategies**:
+
+1. **Start with Preprocessing** (No LLM cost):
+   ```bash
+   python -m src.cli preprocess --input doc.docx --output chunks.json
+   # Review chunks.json to ensure document parsed correctly
+   ```
+
+2. **Test with Small Documents First**:
+   ```bash
+   # Extract just the first few pages for testing
+   # Use Word to create a test document with first 5 pages
+   ```
+
+3. **Use Cheaper Models for Testing**:
+   ```bash
+   # Development
+   python -m src.cli --provider openai --model gpt-4o-mini
+   
+   # Production
+   python -m src.cli --provider anthropic --model claude-opus-4-20250805
+   ```
+
+4. **Cache Schema Discovery**:
+   - Schema discovery results are cached by document hash
+   - Re-running on same document reuses cached schema (saves LLM calls)
+
+5. **Batch Processing**:
+   ```bash
+   # Process multiple documents in one session
+   for doc in data/*.docx; do
+     python -m src.cli --provider openai --input "$doc" --output "results/$(basename $doc .docx).json"
+   done
+   ```
+
+### Handling Large Documents
+
+**For Documents Over 100 Pages**:
+
+1. **Increase Chunk Sizes**:
+   ```bash
+   python -m src.cli preprocess --max-chunk-size 5000
+   ```
+
+2. **Use Streaming** (if available):
+   - Set `temperature=0` for reproducibility
+   - Use `max_tokens=4000` or higher
+
+3. **Split Documents**:
+   - Process major sections separately
+   - Merge results afterward
+
+4. **Monitor Progress**:
+   ```bash
+   # Enable verbose logging
+   python -m src.cli --log-level INFO --provider anthropic
+   ```
+
+### Improving Accuracy
+
+**Strategies for Better Extraction**:
+
+1. **Use Prompt Versioning**:
+   ```bash
+   # Test different prompt versions
+   python -m src.cli --prompt-version v1.2
+   python -m src.cli --prompt-version v1.1
+   # Compare results
+   ```
+
+2. **Enable Grounding Verification**:
+   - RuleAgent automatically grounds rules against source text
+   - Agent1 atomizer includes multi-factor confidence scoring
+   - Review `grounded_in` field in output
+
+3. **Review Debug Outputs**:
+   ```bash
+   python -m src.cli --debug --dump-debug
+   # Check debug_*/raw_rules.json for LLM hallucinations
+   ```
+
+4. **Use Quality Evaluation**:
+   ```bash
+   python -m src.cli atomize  # Includes quality checks
+   # Review evaluation.json for quality metrics
+   ```
+
+5. **Set Confidence Thresholds**:
+   ```python
+   # In code, filter by confidence
+   rules = [r for r in rules if r.confidence >= 0.80]
+   ```
+
+### Common Pitfalls
+
+**❌ Don't**:
+- Use low-quality scanned PDFs (convert to DOCX first)
+- Process documents with complex layouts without preprocessing first
+- Ignore validation errors (they indicate real issues)
+- Use tiny chunk sizes (<50 chars) or huge chunk sizes (>10,000 chars)
+- Skip schema discovery for unfamiliar document formats
+- Ignore quality evaluation results in production
+
+**✅ Do**:
+- Use native DOCX format when possible
+- Preprocess documents first to verify structure
+- Review validation errors and fix source documents
+- Use appropriate chunk sizes for your document type (2000-5000 chars)
+- Run schema discovery on new document types
+- Review quality evaluation and address critical issues
+
+### Production Deployment Checklist
+
+Before deploying to production:
+
+- [ ] Test with representative sample documents
+- [ ] Run full atomization pipeline with quality checks
+- [ ] Review confidence thresholds (adjust if needed)
+- [ ] Set up monitoring/logging
+- [ ] Configure appropriate LLM model (Claude for production)
+- [ ] Set up error handling and retry logic
+- [ ] Cache schema discovery results
+- [ ] Document expected input formats
+- [ ] Create validation tests for output
+- [ ] Set up alerts for quality score drops
+
+### Debugging Common Issues
+
+**Issue: "No rules extracted"**
+```bash
+# Check preprocessing
+python -m src.cli preprocess --input doc.docx --output chunks.json
+# Review chunks.json - are there meaningful chunks?
+
+# Check with debug mode
+python -m src.cli --debug --dump-debug --provider openai
+# Review debug_*/raw_rules.json - what did LLM return?
+```
+
+**Issue: "Low confidence scores"**
+```bash
+# Try different LLM provider
+python -m src.cli --provider anthropic  # Usually more accurate
+
+# Check schema discovery
+python -m src.cli discover-schema --input doc.docx --provider anthropic
+# Low schema confidence indicates document structure issues
+```
+
+**Issue: "Too many duplicate rules"**
+- Document may have repetitive content
+- Deduplication threshold may be too low
+- Review `deduped_rules.json` in debug mode
+
+**Issue: "Rules not grounded in source"**
+- LLM is hallucinating
+- Switch to Claude (better grounding)
+- Try different prompt version
+- Check source document for ambiguity
 
 ## Troubleshooting
 
