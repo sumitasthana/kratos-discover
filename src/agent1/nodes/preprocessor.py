@@ -7,9 +7,7 @@ from docx import Document
 
 from agent1.exceptions import EmptyDocumentError, FileParseError
 from agent1.models.chunks import PreprocessorOutput
-from agent1.parsers.csv_parser import parse_csv
 from agent1.parsers.docx_parser import parse_docx_to_chunks
-from agent1.parsers.xlsx_parser import parse_xlsx
 from agent1.utils.chunking import generate_chunk_id
 
 logger = structlog.get_logger(__name__)
@@ -37,15 +35,9 @@ def parse_and_chunk(
                 max_chunk_chars=max_chunk_chars,
                 min_chunk_chars=min_chunk_chars,
             )
-        elif resolved_type == "xlsx":
-            parse_xlsx(file_path)
-            raise AssertionError("unreachable")
-        elif resolved_type == "csv":
-            parse_csv(file_path)
-            raise AssertionError("unreachable")
         else:
             raise ValueError(
-                f"Unsupported file type: {resolved_type}. Supported: .docx, .xlsx, .csv"
+                f"Unsupported file type: {resolved_type}. Supported: .docx"
             )
     except EmptyDocumentError:
         raise

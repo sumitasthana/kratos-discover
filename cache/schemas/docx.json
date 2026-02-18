@@ -15,7 +15,7 @@
           "canonical_field": "policy_id",
           "inferred_type": "identifier",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Policy ID' contains unique policy identifiers",
+          "mapping_rationale": "Field labeled 'Policy ID' contains unique identifiers for policy records",
           "example_values": [
             "P-001",
             "P-002"
@@ -33,7 +33,7 @@
           "canonical_field": "policy_title",
           "inferred_type": "text",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Policy Title' contains descriptive policy names",
+          "mapping_rationale": "Field labeled 'Policy Title' contains descriptive names of policies",
           "example_values": [
             "FDIC 370 Deposit Account Data Quality and Accuracy Standards",
             "Beneficial Ownership Identification and Documentation Standards"
@@ -69,7 +69,7 @@
           "canonical_field": "approval_authority",
           "inferred_type": "person_or_role",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Approval Authority' contains roles that approve policies",
+          "mapping_rationale": "Field labeled 'Approval Authority' contains roles/entities that approve policies",
           "example_values": [
             "Board Risk & Compliance Committee"
           ],
@@ -86,7 +86,7 @@
           "canonical_field": "effective_date",
           "inferred_type": "date",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Effective Date' contains policy effective dates",
+          "mapping_rationale": "Field labeled 'Effective Date' contains date values for when policies take effect",
           "example_values": [
             "January 30, 2026"
           ],
@@ -103,7 +103,7 @@
           "canonical_field": "review_cycle",
           "inferred_type": "text",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Review Cycle' contains review frequency information",
+          "mapping_rationale": "Field labeled 'Review Cycle' contains frequency information for policy reviews",
           "example_values": [
             "Annual"
           ],
@@ -120,9 +120,9 @@
           "canonical_field": "policy_objective",
           "inferred_type": "text",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Policy Objective' contains detailed policy objectives",
+          "mapping_rationale": "Field labeled 'Policy Objective' contains detailed objective descriptions",
           "example_values": [
-            "Establish enterprise-wide data quality standards for deposit account information"
+            "Ensure all deposit account data maintained across our third-party core banking system"
           ],
           "date_format": null,
           "delimiter": null,
@@ -137,9 +137,9 @@
           "canonical_field": "policy_statement",
           "inferred_type": "text",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Policy Statement' contains policy statements",
+          "mapping_rationale": "Field labeled 'Policy Statement' contains formal policy statements",
           "example_values": [
-            "National Banking Corporation shall maintain deposit account reco"
+            "Regional Community Bank shall maintain deposit account records"
           ],
           "date_format": null,
           "delimiter": null,
@@ -156,7 +156,7 @@
           "confidence": 0.9,
           "mapping_rationale": "Field labeled 'Testing Requirements' contains detailed testing procedures",
           "example_values": [
-            "1. COMPREHENSIVE ANNUAL TESTING"
+            "1. ANNUAL TESTING REQUIREMENTS"
           ],
           "date_format": null,
           "delimiter": null,
@@ -179,7 +179,7 @@
           "canonical_field": "risk_id",
           "inferred_type": "identifier",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Risk ID' contains unique risk identifiers",
+          "mapping_rationale": "Field labeled 'Risk ID' contains unique identifiers for risk records",
           "example_values": [
             "R-001",
             "R-002"
@@ -197,7 +197,7 @@
           "canonical_field": "risk_description",
           "inferred_type": "text",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Risk Description' contains detailed risk descriptions",
+          "mapping_rationale": "Field labeled 'Risk Description' contains detailed descriptions of risks",
           "example_values": [
             "Deposit account records contain incomplete, inaccurate, or outdated information",
             "Technology systems fail to generate required files within mandated timeframes"
@@ -215,7 +215,7 @@
           "canonical_field": "inherent_risk_rating",
           "inferred_type": "enum",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Inherent Risk Rating' contains risk rating values",
+          "mapping_rationale": "Field labeled 'Inherent Risk Rating' contains standardized risk level values",
           "example_values": [
             "High",
             "Medium-High"
@@ -233,7 +233,7 @@
           "canonical_field": "residual_risk_rating",
           "inferred_type": "enum",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Residual Risk Rating' contains post-mitigation risk ratings",
+          "mapping_rationale": "Field labeled 'Residual Risk Rating' contains standardized risk level values after mitigation",
           "example_values": [
             "Medium",
             "Low"
@@ -251,7 +251,7 @@
           "canonical_field": "risk_owner",
           "inferred_type": "person_or_role",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Risk Owner' contains organizational roles responsible for risks",
+          "mapping_rationale": "Field labeled 'Risk Owner' contains organizational roles responsible for managing risks",
           "example_values": [
             "Chief Operations Officer",
             "Chief Information Officer"
@@ -268,8 +268,8 @@
           "raw_label": "Archer Module",
           "canonical_field": "archer_module",
           "inferred_type": "text",
-          "confidence": 0.85,
-          "mapping_rationale": "Field labeled 'Archer Module' contains GRC system module paths",
+          "confidence": 0.9,
+          "mapping_rationale": "Field labeled 'Archer Module' contains system navigation paths for GRC platform",
           "example_values": [
             "Risk Register > Compliance Risks > Regulatory Compliance"
           ],
@@ -286,7 +286,7 @@
           "canonical_field": "mitigation_controls",
           "inferred_type": "reference_list",
           "confidence": 0.8,
-          "mapping_rationale": "Field labeled 'Mitigation Controls' references related controls",
+          "mapping_rationale": "Field labeled 'Mitigation Controls' references related control records",
           "example_values": [
             "See Control Framework section for detailed controls"
           ],
@@ -311,7 +311,7 @@
           "canonical_field": "control_id",
           "inferred_type": "identifier",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Control ID' contains unique control identifiers",
+          "mapping_rationale": "Field labeled 'Control ID' contains unique identifiers for control records",
           "example_values": [
             "C-001",
             "C-002"
@@ -329,7 +329,7 @@
           "canonical_field": "control_description",
           "inferred_type": "text",
           "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Control Description' contains detailed control descriptions",
+          "mapping_rationale": "Field labeled 'Control Description' contains detailed descriptions of control activities",
           "example_values": [
             "Account opening system requires completion of all mandatory customer data fields",
             "Finance reconciles aggregate deposit balances between core system and general ledger monthly"
@@ -347,7 +347,7 @@
           "canonical_field": "control_type",
           "inferred_type": "composite_enum",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Control Type' contains control classification with multiple attributes",
+          "mapping_rationale": "Field labeled 'Control Type' contains standardized control categorizations with multiple attributes",
           "example_values": [
             "Preventive / Automated",
             "Detective / Manual"
@@ -365,7 +365,7 @@
           "canonical_field": "control_owner",
           "inferred_type": "person_or_role",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Control Owner' contains roles responsible for controls",
+          "mapping_rationale": "Field labeled 'Control Owner' contains organizational roles responsible for controls",
           "example_values": [
             "VP Retail Banking",
             "Controller"
@@ -383,7 +383,7 @@
           "canonical_field": "operating_frequency",
           "inferred_type": "enum",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Operating Frequency' contains frequency of control execution",
+          "mapping_rationale": "Field labeled 'Operating Frequency' contains standardized frequency values for control execution",
           "example_values": [
             "Continuous",
             "Monthly"
@@ -401,7 +401,7 @@
           "canonical_field": "testing_frequency",
           "inferred_type": "enum",
           "confidence": 0.9,
-          "mapping_rationale": "Field labeled 'Testing Frequency' contains frequency of control testing",
+          "mapping_rationale": "Field labeled 'Testing Frequency' contains standardized frequency values for control testing",
           "example_values": [
             "Quarterly",
             "Annual"
@@ -418,8 +418,8 @@
           "raw_label": "Archer Module",
           "canonical_field": "archer_module",
           "inferred_type": "text",
-          "confidence": 0.85,
-          "mapping_rationale": "Field labeled 'Archer Module' contains GRC system module paths",
+          "confidence": 0.9,
+          "mapping_rationale": "Field labeled 'Archer Module' contains system navigation paths for GRC platform",
           "example_values": [
             "Controls > Operational Controls > Deposit Compliance"
           ],
@@ -436,7 +436,7 @@
           "canonical_field": "evidence",
           "inferred_type": "list",
           "confidence": 0.85,
-          "mapping_rationale": "Field labeled 'Evidence' contains lists of evidence types for control testing",
+          "mapping_rationale": "Field labeled 'Evidence' contains lists of documentation types for control testing",
           "example_values": [
             "Control testing workpapers, system screenshots, reports, management approvals"
           ],
@@ -460,14 +460,11 @@
     "Trust Accounts:",
     "Document Version:",
     "GRC Platform:",
-    "Field",
-    "Objective",
-    "Key Requirements",
-    "Related Controls",
     "Scope",
     "Detailed Requirements",
     "Roles & Responsibilities",
     "Related Regulations",
+    "Related Controls",
     "Ownership Categories and Requirements",
     "Documentation Requirements",
     "Update Procedures",
@@ -476,8 +473,10 @@
     "Deficiency Escalation",
     "Disaster Recovery Testing"
   ],
-  "anomalies": [],
+  "anomalies": [
+    "Policy P-003 missing Approval Authority and Review Cycle fields that are present in other policy records"
+  ],
   "total_records_estimated": 43,
-  "schema_version": "schema-b8cd165c97a6",
-  "avg_confidence": 0.9083333333333333
+  "schema_version": "schema-d5598b0b8eb9",
+  "avg_confidence": 0.9125
 }
