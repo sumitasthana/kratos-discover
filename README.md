@@ -1,6 +1,6 @@
 # kratos-discover
 
-Production-grade Rule Agent built with LangGraph for automated extraction and analysis of regulatory compliance documents.
+Production-grade regulatory requirement extraction system built with LangGraph for automated extraction and analysis of compliance documents.
 
 ## Table of Contents
 
@@ -10,8 +10,7 @@ Production-grade Rule Agent built with LangGraph for automated extraction and an
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
   - [System Overview](#system-overview)
-  - [Pipeline 1: Rule/GRC Extraction](#pipeline-1-rulegrc-extraction-via-ruleagent)
-  - [Pipeline 2: Advanced Requirements Processing](#pipeline-2-advanced-requirements-processing-via-agent1)
+  - [Pipeline: Advanced Requirements Processing](#pipeline-advanced-requirements-processing-via-agent1)
   - [Data Flow Diagrams](#data-flow-diagrams)
 - [Module Documentation](#module-documentation)
 - [Complete API Reference](#complete-api-reference)
@@ -231,83 +230,27 @@ Kratos-discover is built as a **modular, multi-stage document processing system*
                                              │
                     ┌────────────────────────┴────────────────────────┐
                     │                                                  │
-          ┌─────────▼──────────┐                       ┌─────────▼────────────┐
-          │   PIPELINE 1        │                       │   PIPELINE 2         │
-          │   RuleAgent         │                       │   Agent1             │
-          │   (5 Nodes)         │                       │   (5 Stages)         │
-          │                     │                       │                      │
-          │  Rules & GRC        │                       │  Advanced            │
-          │  Extraction         │                       │  Requirements        │
-          └─────────┬───────────┘                       └─────────┬────────────┘
-                    │                                             │
-                    │                                             │
-          ┌─────────▼───────────┐                       ┌─────────▼────────────┐
-          │  Shared Components   │◄─────────────────────│  Shared Components   │
-          │  - Models            │                       │  - Scoring           │
-          │  - LLM Clients       │                       │  - Chunking          │
-          │  - Prompt Registry   │                       │  - Parsers           │
-          └──────────────────────┘                       └──────────────────────┘
+          ┌─────────▼────────────┐
+          │   PIPELINE           │
+          │   Agent1             │
+          │   (5 Stages)         │
+          │                      │
+          │  Advanced            │
+          │  Requirements        │
+          └─────────┬────────────┘
+                    │
+                    │
+          ┌─────────▼───────────┐
+          │  Shared Components   │
+          │  - Models            │
+          │  - LLM Clients       │
+          │  - Scoring           │
+          │  - Chunking          │
+          │  - Parsers           │
+          └──────────────────────┘
 ```
 
-### Pipeline 1: Rule/GRC Extraction (via RuleAgent)
-A 5-node LangGraph workflow for extracting rules and GRC components:
-
-1. **Segmentation Node**: Divides the source document into logical sections based on document structure
-2. **Extraction Node**: Uses LLM to extract rules or GRC components with structured schemas
-3. **Validation Node**: Parses and validates extracted data against Pydantic schemas
-4. **Deduplication Node**: Removes duplicate entries based on content similarity
-5. **Grounding Node**: Verifies each extracted item against source text and filters ungrounded items
-
-#### Pipeline 1 Flow Diagram
-
-```
-Input: Document (DOCX/PDF/HTML)
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  NODE 1: SEGMENTATION                │
-│  - Parse document structure          │
-│  - Identify headings & sections      │
-│  - Create DocumentSection objects    │
-└─────────────────┬───────────────────┘
-                  │ List[DocumentSection]
-                  ▼
-┌─────────────────────────────────────┐
-│  NODE 2: EXTRACTION                  │
-│  - Load prompt from registry         │
-│  - Send sections to LLM              │
-│  - Receive JSON response             │
-└─────────────────┬───────────────────┘
-                  │ Raw JSON
-                  ▼
-┌─────────────────────────────────────┐
-│  NODE 3: VALIDATION                  │
-│  - Parse JSON                        │
-│  - Validate against Pydantic schemas │
-│  - Filter invalid entries            │
-└─────────────────┬───────────────────┘
-                  │ List[Rule] or List[GRCComponent]
-                  ▼
-┌─────────────────────────────────────┐
-│  NODE 4: DEDUPLICATION               │
-│  - Compute similarity scores         │
-│  - Remove near-duplicates (≥0.85)    │
-│  - Keep highest confidence entries   │
-└─────────────────┬───────────────────┘
-                  │ Deduplicated List
-                  ▼
-┌─────────────────────────────────────┐
-│  NODE 5: GROUNDING                   │
-│  - Verify text in source             │
-│  - Calculate confidence scores       │
-│  - Filter low-confidence items       │
-└─────────────────┬───────────────────┘
-                  │
-                  ▼
-Output: rules.json or grc_components.json
-```
-
-### Pipeline 2: Advanced Requirements Processing (via Agent1)
+### Pipeline: Advanced Requirements Processing (via Agent1)
 A 5-stage pipeline for in-depth regulatory requirement extraction:
 
 1. **Preprocessing (Node 1)**: Deterministic DOCX/XLSX/CSV parsing into structured chunks
@@ -316,7 +259,7 @@ A 5-stage pipeline for in-depth regulatory requirement extraction:
 4. **Requirement Atomizer (Node 4)**: Extracts granular regulatory requirements with confidence scoring
 5. **Quality Evaluation (Node 5)**: Multi-check quality assurance (grounding, testability, hallucination, deduplication)
 
-#### Pipeline 2 Flow Diagram (Agent1)
+#### Pipeline Flow Diagram (Agent1)
 
 ```
 Input: Document (DOCX)
@@ -598,13 +541,11 @@ Output: requirements.json + eval_report.json
 
 ### Core Components
 
-- **RuleAgent**: Main orchestrator implementing the LangGraph pipeline for rule/GRC extraction
-- **PromptRegistry**: Manages versioned prompt specifications stored as YAML files
-- **CLI**: Multi-mode command-line interface with 4 subcommands (extract, preprocess, discover-schema, atomize)
 - **Agent1**: Advanced processing pipeline with deterministic parsing and confidence-based quality gates
+- **CLI**: Multi-mode command-line interface with 4 subcommands (extract, preprocess, discover-schema, atomize)
 - **Shared Models**: Centralized enums and type definitions used across all modules
 - **Scoring System**: Multi-factor confidence scoring with grounding verification
-- **Data Models**: Pydantic models for Rules, Policies, Risks, Controls, and Regulatory Requirements
+- **Data Models**: Pydantic models for Regulatory Requirements
 
 ## Module Documentation
 
@@ -616,12 +557,11 @@ This section provides detailed explanations of each module in the codebase, desc
 
 The CLI module provides four distinct commands that expose different parts of the processing pipeline:
 
-1. **`run` (default)**: Rule or GRC component extraction
-   - Modes: `rules` or `grc_components`
-   - Uses the complete 5-node RuleAgent pipeline
+1. **`run` (default)**: Requirement extraction using Agent1 pipeline
+   - Advanced processing with deterministic parsing and quality gates
    - Supports debug mode with intermediate output dumps
    - Configurable LLM providers (OpenAI or Anthropic)
-   - Example: `python -m src.cli --provider openai --mode rules`
+   - Example: `python -m src.cli --provider openai`
 
 2. **`preprocess`**: Deterministic document parsing (no LLM)
    - Parses DOCX/XLSX/CSV into structured chunks
@@ -648,142 +588,11 @@ The CLI module provides four distinct commands that expose different parts of th
 - `run_schema_discovery()`: Runs schema inference
 - `run_atomizer()`: Executes full pipeline with evaluation
 
-### Rule Agent (`src/rule_agent.py`)
-
-**Purpose**: LangGraph-based orchestrator for rule and GRC component extraction
-
-The RuleAgent is the heart of the rule extraction system. It builds a state machine (LangGraph) with 5 nodes and manages the flow of data through the pipeline.
-
-**Key Classes and Methods**:
-
-- **`RuleAgent`**: Main orchestrator class
-  - `extract_rules(document_path)`: Extracts regulatory rules from a document
-  - `extract_grc_components(document_path)`: Extracts policies, risks, and controls
-  - `_build_extraction_graph()`: Constructs the LangGraph state machine
-  - `_build_grc_extraction_graph()`: Constructs GRC-specific extraction graph
-
-**Data Models** (Pydantic):
-- **`Rule`**: Represents an extracted regulatory rule
-  - `rule_id`: Unique identifier (e.g., "DQ-001" for data quality rules)
-  - `category`: RULE, CONTROL, or RISK (from shared.models.RuleCategory)
-  - `rule_type`: One of 8 types (from shared.models.RuleType)
-  - `rule_description`: Human-readable description
-  - `grounded_in`: Source text that validates this rule
-  - `confidence`: Float from 0.5 to 0.99
-  - `attributes`: Dictionary of additional attributes
-  - `metadata`: Source information (section, location)
-
-- **`PolicyComponent`**: Organizational policy extracted from GRC documents
-- **`RiskComponent`**: Risk statement extracted from GRC documents
-- **`ControlComponent`**: Control measure extracted from GRC documents
-- **`DocumentSection`**: Represents a logical section of the source document
-
-**Pipeline Nodes** (internal methods):
-
-1. **`_segment_requirements_node()`**: 
-   - Divides document by heading hierarchy
-   - Uses agent1 preprocessor for DOCX parsing
-   - Returns list of DocumentSection objects
-
-2. **`_extract_rules_node()`**: 
-   - Sends sections to LLM with extraction prompts
-   - Uses PromptRegistry to get the active prompt version
-   - Returns raw LLM output (JSON)
-
-3. **`_validate_parse_node()`**: 
-   - Parses LLM JSON output
-   - Validates against Pydantic Rule model
-   - Filters out invalid entries
-   - Returns list of valid Rule objects
-
-4. **`_deduplication_node()`**: 
-   - Compares rule titles and descriptions
-   - Removes near-duplicate entries
-   - Uses similarity threshold to detect duplicates
-
-5. **`_grounding_scoring_node()`**: 
-   - Validates that rule text appears in source
-   - Computes confidence score (0.5-0.99)
-   - Filters out rules that cannot be grounded
-   - Uses agent1 scoring modules
-
-**How It Works**:
-When you call `extract_rules()`, the RuleAgent:
-1. Builds a LangGraph state machine with 5 connected nodes
-2. Initializes state with the document path and configuration
-3. Executes the graph, passing state through each node
-4. Each node transforms the state (adding/filtering/scoring rules)
-5. Returns the final list of validated, deduplicated, grounded rules
-
-### Prompt Registry (`src/prompt_registry.py`)
-
-**Purpose**: Version control system for LLM prompts
-
-The PromptRegistry manages prompt specifications as YAML files, allowing you to version prompts and switch between versions without changing code.
-
-**Key Features**:
-- Stores prompts as YAML with metadata (version, tags, description)
-- Tracks active version for each prompt type
-- Supports multiple versions of the same prompt
-- Enables A/B testing and iterative improvement
-
-**File Structure**:
-```
-prompts/
-├── registry.yaml              # Maps prompt names to active versions
-├── rule_extraction/
-│   ├── v1.0.yaml             # Version 1.0 of rule extraction prompt
-│   ├── v1.1.yaml             # Version 1.1 (improved)
-│   └── v1.2.yaml             # Latest version
-└── grc_extraction/
-    ├── v1.0.yaml
-    └── v1.1.yaml
-```
-
-**Key Methods**:
-- `get_active_prompt(name)`: Returns the currently active version of a prompt
-- `get_prompt(name, version)`: Fetches a specific version
-- `set_active_version(name, version)`: Changes the active version
-- `register_version(name, version, spec)`: Adds a new prompt version
-- `list_versions(name)`: Shows all available versions
-
-**Prompt Structure** (in YAML):
-```yaml
-version: "1.2"
-tags: ["production", "improved"]
-description: "Enhanced rule extraction with anti-patterns"
-role: "You are an expert regulatory analyst..."
-rule_types:
-  - data_quality_threshold
-  - ownership_category
-  - ...
-output_schema: |
-  {
-    "rules": [
-      {"rule_id": "...", "rule_type": "..."}
-    ]
-  }
-instructions: |
-  1. Extract all regulatory rules from the text
-  2. Classify each rule by type
-  ...
-anti_patterns: |
-  - Do not extract examples or illustrations
-  - Do not infer rules not explicitly stated
-```
-
-**Usage Example**:
-```python
-registry = PromptRegistry(base_dir=Path("."))
-prompt = registry.get_active_prompt("rule_extraction")
-# Returns fully rendered prompt string with all sections
-```
-
 ### Shared Models (`src/shared/models.py`)
 
 **Purpose**: Centralized definitions to avoid duplication across modules
 
-This module contains canonical enums and type mappings used by both RuleAgent and Agent1. It prevents duplicate definitions and ensures consistency.
+This module contains canonical enums and type mappings used by Agent1. It prevents duplicate definitions and ensures consistency.
 
 **Key Enums**:
 
@@ -794,15 +603,12 @@ This module contains canonical enums and type mappings used by both RuleAgent an
 
 2. **`RuleType`**: Eight types of regulatory requirements
    
-   **Core Types** (used by Agent1 atomizer):
    - `DATA_QUALITY_THRESHOLD`: Quantitative standards with measurable metrics (e.g., "accuracy must be ≥95%")
    - `OWNERSHIP_CATEGORY`: Account ownership classifications (e.g., "joint account", "trust account")
    - `BENEFICIAL_OWNERSHIP_THRESHOLD`: Numeric triggers for beneficial owners (e.g., "25% ownership")
    - `DOCUMENTATION_REQUIREMENT`: Required documents or records (e.g., "must maintain W-9 forms")
    - `UPDATE_REQUIREMENT`: Event-triggered record updates (e.g., "update within 30 days of address change")
    - `UPDATE_TIMELINE`: Time-bound deadlines or SLAs (e.g., "annual certification required")
-   
-   **Extended Types** (used by RuleAgent GRC mode):
    - `CONTROL_REQUIREMENT`: Control-specific requirements
    - `RISK_STATEMENT`: Risk-related statements
 
@@ -839,7 +645,7 @@ This module provides helper functions used by multiple CLI commands to standardi
 
 ### Agent1 Pipeline - Advanced Processing
 
-Agent1 is a sophisticated multi-stage pipeline for extracting granular regulatory requirements. Unlike the basic RuleAgent, it includes deterministic preprocessing, schema inference, confidence gating, and comprehensive quality evaluation.
+Agent1 is a sophisticated multi-stage pipeline for extracting granular regulatory requirements. It includes deterministic preprocessing, schema inference, confidence gating, and comprehensive quality evaluation.
 
 #### Node 1: Preprocessor (`agent1/nodes/preprocessor.py`)
 
@@ -1327,31 +1133,7 @@ The scoring system computes confidence scores (0.0-1.0) for each requirement bas
 
 Here's how the modules work together in a typical extraction workflow:
 
-**Scenario 1: Basic Rule Extraction**
-```
-User runs: python -m src.cli --provider openai --mode rules
-
-Flow:
-1. cli.py::run() called
-2. Loads PromptRegistry
-3. Creates OpenAI LLM via _build_llm()
-4. Instantiates RuleAgent(registry, llm)
-5. Calls agent.extract_rules(document_path)
-6. RuleAgent builds 5-node LangGraph:
-   - Node 1: _segment_requirements_node()
-     → Uses agent1.nodes.preprocessor.parse_and_chunk()
-   - Node 2: _extract_rules_node()
-     → Uses PromptRegistry.get_active_prompt("rule_extraction")
-   - Node 3: _validate_parse_node()
-     → Validates against shared.models.RuleType/RuleCategory
-   - Node 4: _deduplication_node()
-   - Node 5: _grounding_scoring_node()
-     → Uses agent1.scoring.confidence_scorer
-7. Returns validated rules
-8. cli.py writes results to JSON
-```
-
-**Scenario 2: Advanced Atomization**
+**Scenario 1: Advanced Atomization**
 ```
 User runs: python -m src.cli atomize --provider anthropic
 
@@ -1375,7 +1157,7 @@ Flow:
    - schema.json (discovered schema)
 ```
 
-**Scenario 3: Preprocessing Only**
+**Scenario 2: Preprocessing Only**
 ```
 User runs: python -m src.cli preprocess --input doc.docx
 
@@ -1392,25 +1174,12 @@ Flow:
 
 **Where Modules Connect**:
 
-1. **shared.models → rule_agent + agent1**:
-   - RuleType enum used for validation in both
+1. **shared.models → agent1**:
+   - RuleType enum used for validation
    - RuleCategory enum used for classification
    - RULE_TYPE_CODES used for ID generation
 
-2. **agent1.nodes.preprocessor → rule_agent**:
-   - RuleAgent._segment_requirements_node() calls parse_and_chunk()
-   - Enables RuleAgent to use deterministic DOCX parsing
-
-3. **agent1.scoring → rule_agent**:
-   - RuleAgent._grounding_scoring_node() uses confidence_scorer
-   - Provides grounding verification for extracted rules
-
-4. **prompt_registry → rule_agent + agent1**:
-   - RuleAgent loads prompts for rule extraction
-   - Agent1 atomizer loads prompts for requirement extraction
-   - Both use versioned YAML specs
-
-5. **pipeline_runner → cli**:
+2. **pipeline_runner → cli**:
    - All CLI commands use PipelineRunner utilities
    - Standardizes logging and error handling
 
@@ -1534,11 +1303,7 @@ import os
 from pathlib import Path
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
-from src.rule_agent import RuleAgent
-from src.prompt_registry import PromptRegistry
-
-# Initialize prompt registry
-registry = PromptRegistry(base_dir=Path("."))
+from src.agent1.orchestrator import Agent1Orchestrator
 
 # Configure LLM (choose one)
 # Option A: Anthropic Claude
@@ -1555,17 +1320,12 @@ llm = ChatAnthropic(
 # )
 
 # Create agent instance
-agent = RuleAgent(registry=registry, llm=llm)
+orchestrator = Agent1Orchestrator(llm=llm)
 
-# Extract rules
-rules = agent.extract_rules(document_path=os.getenv("FDIC_370_PATH"))
-print(f"Extracted {len(rules)} rules")
-
-# Extract GRC components
-components = agent.extract_grc_components(document_path=os.getenv("FDIC_370_PATH"))
-print(f"Policies: {len(components['policies'])}")
-print(f"Risks: {len(components['risks'])}")
-print(f"Controls: {len(components['controls'])}")
+# Extract requirements
+results = orchestrator.run(document_path=os.getenv("FDIC_370_PATH"))
+print(f"Extracted {len(results.requirements)} requirements")
+print(f"Quality Score: {results.evaluation.overall_score}")
 ```
 
 ## Configuration
@@ -1580,169 +1340,42 @@ print(f"Controls: {len(components['controls'])}")
 | `OPENAI_MODEL` | OpenAI model identifier | `gpt-4o-mini` |
 | `FDIC_370_PATH` | Path to FDIC 370 document | `data/FDIC_370_GRC_Library_National_Bank.docx` |
 | `LLM_PROVIDER` | Default LLM provider | `openai` |
-| `RULE_AGENT_MODE` | Default extraction mode | `rules` |
-| `RULE_AGENT_OUTPUT_DIR` | Default output directory | `outputs` |
-| `RULE_AGENT_LOG_LEVEL` | Logging verbosity | `INFO` |
 
-### Prompt Versioning
+### Regulatory Requirement Model
 
-Prompt specifications are stored in `prompts/` with version control:
-
-- `prompts/registry.yaml`: Defines active prompt versions
-- `prompts/rule_extraction/v1.0.yaml`: Rule extraction prompt v1.0
-- `prompts/rule_extraction/v1.1.yaml`: Rule extraction prompt v1.1
-- `prompts/rule_extraction/v1.2.yaml`: Rule extraction prompt v1.2
-
-To switch prompt versions, either:
-1. Edit `prompts/registry.yaml` to change the active version
-2. Use the `--prompt-version` CLI flag to override at runtime
-
-## Data Models
-
-Kratos-discover uses Pydantic models for type safety, validation, and serialization. This section describes the key data models used throughout the system.
-
-### Rule Model
-
-The `Rule` model represents a single extracted regulatory rule or requirement from the RuleAgent pipeline.
+The `RegulatoryRequirement` model represents a single extracted requirement from the Agent1 pipeline.
 
 ```python
-class Rule(BaseModel):
-    rule_id: str                    # Unique identifier (e.g., "DQ-001", "OWN-002")
-    category: RuleCategory          # "rule", "control", or "risk"
+class RegulatoryRequirement(BaseModel):
+    requirement_id: str             # Unique identifier format: R-{TYPE_CODE}-{HASH6}
     rule_type: RuleType             # Type of requirement (see RuleType enum)
-    rule_description: str           # Human-readable description of the rule
-    grounded_in: str                # Source text that validates this rule
-    confidence: float               # Confidence score from 0.5 to 0.99
-    attributes: Dict[str, Any]      # Additional structured attributes
+    rule_description: str           # Plain-English statement of the obligation
+    grounded_in: str                # Verbatim text from source that supports this requirement
+    confidence: float               # Confidence score from 0.50 to 0.99
+    attributes: Dict[str, Any]      # Type-specific structured attributes
     metadata: RuleMetadata          # Source information and extraction metadata
 ```
 
-**Example Rule**:
+**Example Requirement**:
 ```json
 {
-  "rule_id": "DQ-001",
-  "category": "rule",
+  "requirement_id": "R-DQ-a1b2c3",
   "rule_type": "data_quality_threshold",
   "rule_description": "Customer name accuracy must be at least 95%",
   "grounded_in": "Section 2.3 states that institutions must maintain customer name records with a minimum accuracy threshold of 95 percent.",
   "confidence": 0.87,
   "attributes": {
-    "threshold": "95%",
     "metric": "accuracy",
-    "applies_to": "customer name",
-    "enforcement": "required"
+    "threshold_value": 95,
+    "threshold_direction": ">=",
+    "threshold_unit": "%"
   },
   "metadata": {
-    "source_section": "Section 2.3",
-    "document_location": "page 12",
-    "extraction_timestamp": "2026-02-18T03:10:36Z"
-  }
-}
-```
-
-### GRC Component Models
-
-The GRC (Governance, Risk, Compliance) models represent organizational policies, risks, and controls.
-
-#### PolicyComponent
-
-Represents an organizational policy or governance requirement.
-
-```python
-class PolicyComponent(BaseModel):
-    policy_id: str              # Unique identifier (e.g., "POL-001")
-    title: str                  # Policy title
-    description: str            # Full policy description
-    owner: str                  # Policy owner (department/role)
-    category: str               # Policy category
-    source_table: str           # Source table reference
-    validation_status: str      # Validation status
-    metadata: Dict[str, Any]    # Additional metadata
-```
-
-**Example Policy**:
-```json
-{
-  "policy_id": "POL-001",
-  "title": "Customer Data Quality Policy",
-  "description": "All customer records must meet minimum data quality standards",
-  "owner": "Data Governance Team",
-  "category": "data_management",
-  "source_table": "Table 2: Policy Requirements",
-  "validation_status": "validated",
-  "metadata": {
-    "source_block": "chunk_015",
-    "effective_date": "2025-01-01"
-  }
-}
-```
-
-#### RiskComponent
-
-Represents an identified risk or risk statement.
-
-```python
-class RiskComponent(BaseModel):
-    risk_id: str                # Unique identifier (e.g., "RSK-001")
-    title: str                  # Risk title
-    description: str            # Full risk description
-    risk_type: str              # Type of risk (operational, compliance, etc.)
-    severity: str               # Risk severity (high, medium, low)
-    likelihood: str             # Likelihood (high, medium, low)
-    owner: str                  # Risk owner
-    source_table: str           # Source table reference
-    metadata: Dict[str, Any]    # Additional metadata
-```
-
-**Example Risk**:
-```json
-{
-  "risk_id": "RSK-001",
-  "title": "Inaccurate Customer Data",
-  "description": "Risk of regulatory penalties due to inaccurate customer identification data",
-  "risk_type": "compliance",
-  "severity": "high",
-  "likelihood": "medium",
-  "owner": "Compliance Department",
-  "source_table": "Table 3: Risk Register",
-  "metadata": {
-    "source_block": "chunk_023",
-    "last_reviewed": "2026-01-15"
-  }
-}
-```
-
-#### ControlComponent
-
-Represents a control measure or safeguard.
-
-```python
-class ControlComponent(BaseModel):
-    control_id: str             # Unique identifier (e.g., "CTL-001")
-    title: str                  # Control title
-    description: str            # Full control description
-    control_type: str           # Type of control (preventive, detective, corrective)
-    frequency: str              # Control frequency (daily, weekly, monthly, etc.)
-    owner: str                  # Control owner
-    automated: bool             # Whether control is automated
-    source_table: str           # Source table reference
-    metadata: Dict[str, Any]    # Additional metadata
-```
-
-**Example Control**:
-```json
-{
-  "control_id": "CTL-001",
-  "title": "Daily Data Quality Validation",
-  "description": "Automated validation of customer data accuracy against defined thresholds",
-  "control_type": "detective",
-  "frequency": "daily",
-  "owner": "Data Operations Team",
-  "automated": true,
-  "source_table": "Table 4: Control Framework",
-  "metadata": {
-    "source_block": "chunk_031",
-    "implementation_date": "2025-06-01"
+    "source_chunk_id": "chunk_42",
+    "source_location": "Section 2.3",
+    "schema_version": "1.0",
+    "prompt_version": "v2.1",
+    "extraction_iteration": 1
   }
 }
 ```
@@ -1890,8 +1523,6 @@ class RuleType(str, Enum):
     DOCUMENTATION_REQUIREMENT = "documentation_requirement"
     UPDATE_REQUIREMENT = "update_requirement"
     UPDATE_TIMELINE = "update_timeline"
-    
-    # Extended types (used by RuleAgent GRC mode)
     CONTROL_REQUIREMENT = "control_requirement"
     RISK_STATEMENT = "risk_statement"
 ```
@@ -3626,8 +3257,6 @@ python -m src.cli preprocess --max-chunk-size 5000 --min-chunk-size 200
 ```
 
 **Use Appropriate Modes**:
-- Use `--mode rules` for requirement documents
-- Use `--mode grc_components` for GRC libraries
 - Use `atomize` command for production-quality extraction with full evaluation
 
 **Enable Debug Mode for Troubleshooting**:
@@ -3640,49 +3269,7 @@ python -m src.cli --debug atomize --provider anthropic --input document.docx
 
 This section explains how Kratos-discover processes documents from start to finish, helping you understand when to use each component.
 
-### Workflow 1: Simple Rule Extraction
-
-**Use Case**: Extract regulatory rules from a compliance document quickly.
-
-**Steps**:
-1. You provide a DOCX document
-2. RuleAgent segments it into logical sections (using Agent1 preprocessor)
-3. Each section is sent to LLM with rule extraction prompts
-4. LLM returns structured rules in JSON format
-5. Rules are validated against Pydantic schemas
-6. Duplicate rules are removed
-7. Each rule is grounded against source text
-8. Final validated rules are returned
-
-**When to Use**: When you need quick extraction of rules without advanced quality checks.
-
-**Command**:
-```bash
-python -m src.cli --provider openai --mode rules --input doc.docx --output rules.json
-```
-
-### Workflow 2: GRC Component Extraction
-
-**Use Case**: Extract policies, risks, and controls from GRC documents.
-
-**Steps**:
-1. You provide a GRC library document (e.g., FDIC 370)
-2. RuleAgent segments document into sections
-3. Each section is analyzed for GRC components
-4. LLM extracts policies, risks, and controls separately
-5. Each component type is validated against its schema
-6. Components are deduplicated
-7. Components are grounded against source text
-8. Final components are returned grouped by type
-
-**When to Use**: When working with structured GRC documents that contain policies, risks, and controls.
-
-**Command**:
-```bash
-python -m src.cli --provider openai --mode grc_components --input grc_doc.docx --output grc.json
-```
-
-### Workflow 3: Document Preprocessing Only
+### Workflow 1: Document Preprocessing Only
 
 **Use Case**: Parse document structure without LLM costs, for inspection or debugging.
 
@@ -3706,7 +3293,7 @@ python -m src.cli --provider openai --mode grc_components --input grc_doc.docx -
 python -m src.cli preprocess --input doc.docx --output chunks.json
 ```
 
-### Workflow 4: Schema Discovery
+### Workflow 2: Schema Discovery
 
 **Use Case**: Understand document structure before extraction.
 
@@ -3730,7 +3317,7 @@ python -m src.cli preprocess --input doc.docx --output chunks.json
 python -m src.cli discover-schema --input doc.docx --provider anthropic --output schema.json
 ```
 
-### Workflow 5: Advanced Atomization (Full Pipeline)
+### Workflow 3: Advanced Atomization (Full Pipeline)
 
 **Use Case**: Extract requirements with comprehensive quality assurance.
 
@@ -3872,9 +3459,8 @@ pytest --cov=. --cov-report=html
 
 Run specific test files:
 ```bash
-pytest tests/test_rule_agent.py
-pytest tests/test_prompt_registry.py
 pytest tests/test_cli.py
+pytest tests/test_agent1_preprocessor.py
 ```
 
 ## Quick Start Examples
@@ -4356,9 +3942,8 @@ kratos-discover/
 │       └── v1.2.yaml
 ├── src/
 │   ├── cli.py                  # Command-line interface
-│   ├── rule_agent.py           # Main RuleAgent implementation
-│   ├── prompt_registry.py      # Prompt version management
-│   └── agent1/                 # Deterministic preprocessor module
+│   ├── shared/                 # Shared models and utilities
+│   └── agent1/                 # Agent1 pipeline module
 │       ├── __init__.py
 │       ├── exceptions.py
 │       ├── models/             # Data models
@@ -4368,8 +3953,6 @@ kratos-discover/
 ├── tests/
 │   ├── conftest.py
 │   ├── test_cli.py
-│   ├── test_rule_agent.py
-│   ├── test_prompt_registry.py
 │   └── test_agent1_preprocessor.py
 ├── wiki/                       # Documentation wiki
 │   ├── Home.md
@@ -4831,7 +4414,6 @@ Typical performance on a standard document (50 pages, 150 chunks):
 | Agent1 | Claude Sonnet | ~5 min | ~$0.60 | 0.80-0.88 |
 | Agent1 | Claude Haiku | ~3 min | ~$0.10 | 0.75-0.83 |
 | Agent1 | GPT-4o-mini | ~4 min | ~$0.08 | 0.73-0.81 |
-| RuleAgent | Claude Sonnet | ~3 min | ~$0.40 | 0.78-0.85 |
 
 *Note: Performance varies based on document complexity and server load*
 
