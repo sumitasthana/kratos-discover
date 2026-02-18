@@ -1,6 +1,6 @@
 # kratos-discover
 
-Production-grade Rule Agent built with LangGraph for automated extraction and analysis of regulatory compliance documents.
+Production-grade document processing system built with LangGraph for automated extraction and analysis of regulatory compliance documents.
 
 ## Table of Contents
 
@@ -10,8 +10,7 @@ Production-grade Rule Agent built with LangGraph for automated extraction and an
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
   - [System Overview](#system-overview)
-  - [Pipeline 1: Rule/GRC Extraction](#pipeline-1-rulegrc-extraction-via-ruleagent)
-  - [Pipeline 2: Advanced Requirements Processing](#pipeline-2-advanced-requirements-processing-via-agent1)
+  - [Pipeline: Advanced Requirements Processing](#pipeline-advanced-requirements-processing-via-agent1)
   - [Data Flow Diagrams](#data-flow-diagrams)
 - [Module Documentation](#module-documentation)
 - [Complete API Reference](#complete-api-reference)
@@ -3558,9 +3557,8 @@ pytest --cov=. --cov-report=html
 
 Run specific test files:
 ```bash
-pytest tests/test_rule_agent.py
-pytest tests/test_prompt_registry.py
 pytest tests/test_cli.py
+pytest tests/test_agent1_preprocessor.py
 ```
 
 ## Quick Start Examples
