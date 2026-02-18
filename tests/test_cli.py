@@ -4,27 +4,25 @@ from pathlib import Path
 
 from docx import Document
 
-from rule_agent import RuleAgent
 from agent1.nodes.preprocessor import parse_and_chunk
 
 
 def test_imports() -> None:
     # Smoke test that modules are importable.
-    assert RuleAgent is not None
+    assert parse_and_chunk is not None
 
 
 def test_cli_parser_builds() -> None:
     from cli import build_parser
 
     parser = build_parser()
-    args = parser.parse_args([])
+    # Test atomize subcommand
+    args = parser.parse_args(["atomize", "--input", "test.docx"])
 
-    assert args.mode in {"rules", "grc_components"}
-    assert args.provider in {"openai", "anthropic"}
-    assert isinstance(args.input_path, str)
+    assert args.command == "atomize"
+    assert args.input_path == "test.docx"
     assert isinstance(args.output_dir, str)
     assert isinstance(args.log_level, str)
-    assert hasattr(args, "dump_debug")
 
 
 def test_cli_preprocess_writes_output(tmp_path: Path) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 from collections import defaultdict
@@ -8,13 +9,13 @@ from pathlib import Path
 
 import structlog
 import yaml
-from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel
 
 from agent1.models.chunks import ContentChunk
 from agent1.models.schema_map import SchemaMap
 from agent1.models.state import Phase1State
 from agent1.cache.schema_cache import get_cached_schema, cache_schema
+from agent1.utils.llm_client import get_anthropic_client
 
 logger = structlog.get_logger(__name__)
 
@@ -322,34 +323,17 @@ CRITICAL:
 
 def call_claude_structured(prompt: str, output_model: type[BaseModel]) -> BaseModel:
     """Call Claude with structured output."""
-    import httpx
-    from anthropic import Anthropic
-    import json
-    
-    # Handle SSL verification for corporate environments
-    verify_ssl = os.getenv("ANTHROPIC_VERIFY_SSL", "true").lower() != "false"
-    
-    # Create Anthropic client with custom SSL settings
-    if not verify_ssl:
-        # Create httpx client that skips SSL verification
-        http_client = httpx.Client(verify=False)
-        client = Anthropic(http_client=http_client)
-    else:
-        client = Anthropic()
+    client = get_anthropic_client()
     
     for attempt in range(MAX_RETRIES):
         try:
-            # Call Claude API
             response = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=4096,
                 messages=[{"role": "user", "content": prompt}],
             )
             
-            # Extract the response content
             content = response.content[0].text if response.content else "{}"
-            
-            # Parse JSON and validate with Pydantic
             data = json.loads(content)
             return output_model(**data)
         except Exception as e:

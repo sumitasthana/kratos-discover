@@ -13,11 +13,8 @@ services:
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-20250805}
       
       # Application Configuration
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
-      - RULE_AGENT_MODE=${RULE_AGENT_MODE:-rules}
-      - RULE_AGENT_OUTPUT_DIR=${RULE_AGENT_OUTPUT_DIR:-outputs}
-      - RULE_AGENT_LOG_LEVEL=${RULE_AGENT_LOG_LEVEL:-INFO}
-      - FDIC_370_PATH=${FDIC_370_PATH:-data/FDIC_370_GRC_Library_National_Bank.docx}
+      - KRATOS_OUTPUT_DIR=${KRATOS_OUTPUT_DIR:-outputs}
+      - KRATOS_LOG_LEVEL=${KRATOS_LOG_LEVEL:-INFO}
     
     volumes:
       # Mount data directory for input documents

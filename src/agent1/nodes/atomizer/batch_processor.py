@@ -4,7 +4,6 @@ Handles LLM calls with retries, batch building, and token tracking.
 """
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
 
@@ -15,6 +14,7 @@ from agent1.models.requirements import ChunkSkipReason, RegulatoryRequirement
 from agent1.models.schema_map import SchemaMap
 from agent1.nodes.atomizer.prompt_builder import PromptBuilder
 from agent1.nodes.atomizer.response_parser import ResponseParser
+from agent1.utils.llm_client import get_anthropic_client
 
 logger = structlog.get_logger(__name__)
 
@@ -99,9 +99,6 @@ class BatchProcessor:
         Returns: (requirements, input_tokens, output_tokens, skip_reason)
         skip_reason is None if requirements were extracted, otherwise indicates why not.
         """
-        import httpx
-        from anthropic import Anthropic
-
         # Build prompts
         schema_context = self.prompt_builder.build_schema_context(schema_map)
         chunks_content = self.prompt_builder.build_chunks_content(batch)
@@ -111,13 +108,8 @@ class BatchProcessor:
         # Set temperature based on iteration
         temperature = 0.0 if extraction_iteration == 2 else 0.1
 
-        # Create client
-        verify_ssl = os.getenv("ANTHROPIC_VERIFY_SSL", "true").lower() != "false"
-        if not verify_ssl:
-            http_client = httpx.Client(verify=False)
-            client = Anthropic(http_client=http_client)
-        else:
-            client = Anthropic()
+        # Create client using shared factory
+        client = get_anthropic_client()
 
         last_error = None
         for attempt in range(MAX_RETRIES_PER_BATCH):
