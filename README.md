@@ -2,11 +2,42 @@
 
 Production-grade Rule Agent built with LangGraph for automated extraction and analysis of regulatory compliance documents.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [The Problem It Solves](#the-problem-it-solves)
+- [Key Features](#key-features)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+  - [System Overview](#system-overview)
+  - [Pipeline 1: Rule/GRC Extraction](#pipeline-1-rulegrc-extraction-via-ruleagent)
+  - [Pipeline 2: Advanced Requirements Processing](#pipeline-2-advanced-requirements-processing-via-agent1)
+  - [Data Flow Diagrams](#data-flow-diagrams)
+- [Module Documentation](#module-documentation)
+- [Complete API Reference](#complete-api-reference)
+- [Configuration Guide](#configuration-guide)
+- [Advanced Usage](#advanced-usage)
+- [Performance Optimization](#performance-optimization)
+- [Integration Patterns](#integration-patterns)
+- [Best Practices](#best-practices)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Overview
 
 Kratos-discover is an intelligent document processing system designed to extract structured regulatory rules, policies, risks, and controls from compliance documents. Built on LangGraph and LangChain, it leverages large language models to transform unstructured regulatory text into actionable, machine-readable data.
 
 The system currently supports processing FDIC 370 GRC Library documents and provides a robust pipeline for segmentation, extraction, validation, deduplication, and grounding.
+
+### Use Cases
+
+- **Regulatory Compliance**: Extract structured requirements from FDIC, OCC, FFIEC, and other regulatory documents
+- **GRC Automation**: Transform policy documents into machine-readable controls and risks
+- **Risk Assessment**: Identify and categorize risks from unstructured compliance documents
+- **Control Cataloging**: Build comprehensive control libraries from multiple sources
+- **Policy Management**: Structure organizational policies for governance systems
+- **Audit Preparation**: Extract testable requirements for compliance audits
 
 ## The Problem It Solves
 
@@ -23,9 +54,10 @@ The agent transforms unstructured regulatory text into structured, validated dat
 
 ## Key Features
 
+### Core Capabilities
 - **Automated Document Segmentation**: Intelligently splits regulatory documents into extractable sections
 - **Multi-Mode Extraction**: Supports both rule extraction and GRC component (policies, risks, controls) extraction
-- **LLM Provider Flexibility**: Compatible with OpenAI and Anthropic Claude models
+- **LLM Provider Flexibility**: Compatible with OpenAI (GPT-4, GPT-4o-mini) and Anthropic Claude (Opus, Sonnet, Haiku) models
 - **Structured Output**: Uses schema-based structured output when supported by the LLM, with fallback to JSON parsing
 - **Validation Pipeline**: Multi-stage validation, deduplication, and parsing to ensure data quality
 - **Strict Grounding**: Enforces verification of extracted items against source text to prevent hallucinations
@@ -33,9 +65,189 @@ The agent transforms unstructured regulatory text into structured, validated dat
 - **Debug Mode**: Comprehensive debugging capabilities with intermediate artifact dumps
 - **Flexible I/O**: Supports multiple document formats (DOCX, PDF, HTML) with configurable output options
 
+### Advanced Features
+- **Schema Discovery**: Automatically infers document structure using LLM analysis
+- **Confidence Gating**: Quality checkpoints with configurable thresholds
+- **Multi-Factor Scoring**: Confidence scores based on 6 independent factors
+- **Batch Processing**: Efficient processing of large documents with rate limiting
+- **Error Recovery**: Graceful handling of LLM failures with automatic retries
+- **Deterministic Parsing**: No-LLM preprocessing for consistent, reproducible results
+- **Quality Evaluation**: Six-check quality assurance framework (grounding, testability, hallucination, deduplication, schema compliance, coverage)
+- **Caching Support**: Schema caching for improved performance on similar documents
+- **Extensible Architecture**: Easy to add new extraction modes, LLM providers, or validation rules
+
+### Quality Assurance
+- **Grounding Verification**: Every extraction is verified against source text
+- **Hallucination Detection**: Identifies LLM-fabricated content
+- **Deduplication**: Removes redundant extractions using similarity matching
+- **Testability Analysis**: Flags vague requirements that can't be tested
+- **Schema Compliance**: Validates extractions match discovered schema
+- **Coverage Metrics**: Measures extraction completeness across document
+
+## Quick Start
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/sumitasthana/kratos-discover.git
+cd kratos-discover
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Or install in editable mode for development
+pip install -e .
+```
+
+### Environment Setup
+
+Create a `.env` file in the project root:
+
+```bash
+# Required: At least one LLM provider
+OPENAI_API_KEY=your_openai_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# Optional: Configuration overrides
+LOG_LEVEL=INFO
+MAX_CHUNK_SIZE=3000
+MIN_CHUNK_SIZE=50
+```
+
+### Basic Usage
+
+#### 1. Simple Rule Extraction (Pipeline 1)
+
+```bash
+# Extract regulatory rules from a document
+python -m src.cli \
+  --provider openai \
+  --mode rules \
+  --input data/regulatory_document.docx \
+  --output outputs/rules.json
+
+# Or use Anthropic Claude (recommended for better grounding)
+python -m src.cli \
+  --provider anthropic \
+  --mode rules \
+  --input data/regulatory_document.docx
+```
+
+#### 2. GRC Component Extraction (Pipeline 1)
+
+```bash
+# Extract policies, risks, and controls
+python -m src.cli \
+  --provider anthropic \
+  --mode grc_components \
+  --input data/grc_policy.docx \
+  --output outputs/grc_components.json
+```
+
+#### 3. Advanced Pipeline with Quality Evaluation (Pipeline 2)
+
+```bash
+# Run the complete Agent1 pipeline
+python -m src.cli atomize \
+  --input data/compliance_doc.docx \
+  --provider anthropic \
+  --output outputs/requirements.json
+
+# View the quality evaluation report
+cat outputs/requirements_eval.json
+```
+
+#### 4. Debug Mode
+
+```bash
+# Enable debug mode to see intermediate outputs
+python -m src.cli \
+  --provider anthropic \
+  --mode rules \
+  --input data/document.docx \
+  --debug \
+  --output outputs/rules_debug.json
+
+# Check debug artifacts in outputs/ directory:
+# - rules_debug_segments.json (segmentation output)
+# - rules_debug_raw_extraction.json (LLM raw output)
+# - rules_debug_validated.json (after validation)
+# - rules_debug_deduplicated.json (after deduplication)
+```
+
+### Quick Example
+
+```python
+# Programmatic API usage
+from pathlib import Path
+from src.cli import _build_llm
+from src.agent1.nodes.preprocessor import parse_and_chunk
+from src.agent1.nodes.schema_discovery import schema_discovery_agent
+
+# Build LLM client
+llm = _build_llm("anthropic", "claude-3-sonnet-20240229")
+
+# Step 1: Preprocess document
+result = parse_and_chunk(
+    file_path=Path("document.docx"),
+    file_type="docx",
+    max_chunk_chars=3000
+)
+print(f"Created {result.total_chunks} chunks")
+
+# Step 2: Discover schema
+schema = schema_discovery_agent(result.chunks, llm)
+print(f"Discovered {len(schema.entities)} entities")
+print(f"Schema confidence: {schema.confidence_avg:.2f}")
+
+# Step 3: Extract requirements (see full example in wiki)
+# ...
+```
+
 ## Architecture
 
 Kratos-discover is built as a **modular, multi-stage document processing system** that combines deterministic parsing with LLM-powered extraction and validation. The architecture consists of two main processing pipelines:
+
+### System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       KRATOS-DISCOVER                            │
+│                 Document Processing System                       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ├─────────────┬──────────────┐
+                              │             │              │
+                    ┌─────────▼───────┐ ┌───▼────────┐ ┌──▼─────┐
+                    │   CLI Entry      │ │ Python API │ │ Docker │
+                    └─────────┬────────┘ └───┬────────┘ └──┬─────┘
+                              │              │             │
+                              └──────────────┼─────────────┘
+                                             │
+                    ┌────────────────────────┴────────────────────────┐
+                    │                                                  │
+          ┌─────────▼──────────┐                       ┌─────────▼────────────┐
+          │   PIPELINE 1        │                       │   PIPELINE 2         │
+          │   RuleAgent         │                       │   Agent1             │
+          │   (5 Nodes)         │                       │   (5 Stages)         │
+          │                     │                       │                      │
+          │  Rules & GRC        │                       │  Advanced            │
+          │  Extraction         │                       │  Requirements        │
+          └─────────┬───────────┘                       └─────────┬────────────┘
+                    │                                             │
+                    │                                             │
+          ┌─────────▼───────────┐                       ┌─────────▼────────────┐
+          │  Shared Components   │◄─────────────────────│  Shared Components   │
+          │  - Models            │                       │  - Scoring           │
+          │  - LLM Clients       │                       │  - Chunking          │
+          │  - Prompt Registry   │                       │  - Parsers           │
+          └──────────────────────┘                       └──────────────────────┘
+```
 
 ### Pipeline 1: Rule/GRC Extraction (via RuleAgent)
 A 5-node LangGraph workflow for extracting rules and GRC components:
@@ -46,6 +258,55 @@ A 5-node LangGraph workflow for extracting rules and GRC components:
 4. **Deduplication Node**: Removes duplicate entries based on content similarity
 5. **Grounding Node**: Verifies each extracted item against source text and filters ungrounded items
 
+#### Pipeline 1 Flow Diagram
+
+```
+Input: Document (DOCX/PDF/HTML)
+    │
+    ▼
+┌─────────────────────────────────────┐
+│  NODE 1: SEGMENTATION                │
+│  - Parse document structure          │
+│  - Identify headings & sections      │
+│  - Create DocumentSection objects    │
+└─────────────────┬───────────────────┘
+                  │ List[DocumentSection]
+                  ▼
+┌─────────────────────────────────────┐
+│  NODE 2: EXTRACTION                  │
+│  - Load prompt from registry         │
+│  - Send sections to LLM              │
+│  - Receive JSON response             │
+└─────────────────┬───────────────────┘
+                  │ Raw JSON
+                  ▼
+┌─────────────────────────────────────┐
+│  NODE 3: VALIDATION                  │
+│  - Parse JSON                        │
+│  - Validate against Pydantic schemas │
+│  - Filter invalid entries            │
+└─────────────────┬───────────────────┘
+                  │ List[Rule] or List[GRCComponent]
+                  ▼
+┌─────────────────────────────────────┐
+│  NODE 4: DEDUPLICATION               │
+│  - Compute similarity scores         │
+│  - Remove near-duplicates (≥0.85)    │
+│  - Keep highest confidence entries   │
+└─────────────────┬───────────────────┘
+                  │ Deduplicated List
+                  ▼
+┌─────────────────────────────────────┐
+│  NODE 5: GROUNDING                   │
+│  - Verify text in source             │
+│  - Calculate confidence scores       │
+│  - Filter low-confidence items       │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+Output: rules.json or grc_components.json
+```
+
 ### Pipeline 2: Advanced Requirements Processing (via Agent1)
 A 5-stage pipeline for in-depth regulatory requirement extraction:
 
@@ -54,6 +315,286 @@ A 5-stage pipeline for in-depth regulatory requirement extraction:
 3. **Confidence Gate (Node 3)**: Decision gate that validates schema confidence before proceeding
 4. **Requirement Atomizer (Node 4)**: Extracts granular regulatory requirements with confidence scoring
 5. **Quality Evaluation (Node 5)**: Multi-check quality assurance (grounding, testability, hallucination, deduplication)
+
+#### Pipeline 2 Flow Diagram (Agent1)
+
+```
+Input: Document (DOCX)
+    │
+    ▼
+┌──────────────────────────────────────────────┐
+│  NODE 1: PREPROCESSOR (Deterministic)        │
+│  - Parse DOCX structure                      │
+│  - Extract tables, lists, prose              │
+│  - Chunk text (50-3000 chars)                │
+│  - Generate document statistics              │
+└────────────────────┬─────────────────────────┘
+                     │ List[ContentChunk] + Stats
+                     ▼
+┌──────────────────────────────────────────────┐
+│  NODE 2: SCHEMA DISCOVERY (LLM)              │
+│  - Analyze chunk structure                   │
+│  - Identify entities & fields                │
+│  - Detect relationships                      │
+│  - Calculate field confidence                │
+└────────────────────┬─────────────────────────┘
+                     │ SchemaMap + confidence
+                     ▼
+┌──────────────────────────────────────────────┐
+│  NODE 3: CONFIDENCE GATE (Decision)          │
+│  - Evaluate schema confidence                │
+│  - Check required fields present             │
+│  ┌──────────────────┐                        │
+│  │ Decision Logic:  │                        │
+│  │ ≥0.85 → Accept   │                        │
+│  │ ≥0.50 → Review   │                        │
+│  │ <0.50 → Reject   │                        │
+│  └──────────────────┘                        │
+└────────────────────┬─────────────────────────┘
+                     │ GateDecision
+                     ├─[REJECT]──→ Stop & Report Error
+                     ├─[REVIEW]──→ Continue with Warning
+                     └─[ACCEPT]──→ Continue
+                     │
+                     ▼
+┌──────────────────────────────────────────────┐
+│  NODE 4: REQUIREMENT ATOMIZER (LLM)          │
+│  - Batch chunks for processing               │
+│  - Build schema-aware prompts                │
+│  - Extract atomic requirements               │
+│  - Parse & validate responses                │
+│  - Apply schema repair if needed             │
+│  - Score confidence (6 factors)              │
+└────────────────────┬─────────────────────────┘
+                     │ List[RegulatoryRequirement]
+                     ▼
+┌──────────────────────────────────────────────┐
+│  NODE 5: QUALITY EVALUATION (6 Checks)       │
+│  ┌────────────────────────────────────────┐  │
+│  │ 1. Grounding Check     (HIGH)          │  │
+│  │ 2. Testability Check   (MEDIUM)        │  │
+│  │ 3. Hallucination Check (CRITICAL)      │  │
+│  │ 4. Deduplication Check (LOW)           │  │
+│  │ 5. Schema Compliance   (MEDIUM)        │  │
+│  │ 6. Coverage Analysis   (INFO)          │  │
+│  └────────────────────────────────────────┘  │
+│  - Aggregate results by severity             │
+│  - Calculate quality score                   │
+│  - Flag specific failures                    │
+└────────────────────┬─────────────────────────┘
+                     │
+                     ▼
+Output: requirements.json + eval_report.json
+```
+
+### Data Flow Diagrams
+
+#### Complete Data Flow (Pipeline 2 - Detailed)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          INPUT LAYER                                     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │  Document (DOCX)            │
+                    │  - Text content             │
+                    │  - Tables                   │
+                    │  - Formatting               │
+                    └──────────────┬──────────────┘
+                                   │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        PREPROCESSING LAYER                               │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  DOCXParser                 │
+                    │  - Extract paragraphs       │
+                    │  - Extract tables (2D)      │
+                    │  - Extract lists            │
+                    │  - Identify headings        │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  ChunkingEngine             │
+                    │  - Split on boundaries      │
+                    │  - Min: 50, Max: 3000 chars │
+                    │  - Preserve structure       │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────────────────────┐
+                    │  ContentChunks (List)                       │
+                    │  [                                          │
+                    │    {                                        │
+                    │      "chunk_id": "chunk_001",               │
+                    │      "chunk_type": "prose",                 │
+                    │      "text": "Banks must maintain...",     │
+                    │      "metadata": {                          │
+                    │        "heading": "Section 2.1",            │
+                    │        "page": 5                            │
+                    │      }                                      │
+                    │    },                                       │
+                    │    ...                                      │
+                    │  ]                                          │
+                    └──────────────┬──────────────────────────────┘
+                                   │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       SCHEMA DISCOVERY LAYER                             │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  LLM (Claude Recommended)   │
+                    │  + Schema Discovery Prompt  │
+                    │  - Analyze structure        │
+                    │  - Infer entities/fields    │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼─────────────────────────────┐
+                    │  SchemaMap                                 │
+                    │  {                                         │
+                    │    "structural_pattern": "vertical_table", │
+                    │    "entities": [                           │
+                    │      {                                     │
+                    │        "name": "Requirements",             │
+                    │        "fields": [                         │
+                    │          {                                 │
+                    │            "name": "requirement_id",       │
+                    │            "confidence": 0.95,             │
+                    │            "data_type": "string"           │
+                    │          },                                │
+                    │          ...                               │
+                    │        ]                                   │
+                    │      }                                     │
+                    │    ],                                      │
+                    │    "confidence_avg": 0.87                  │
+                    │  }                                         │
+                    └──────────────┬─────────────────────────────┘
+                                   │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       CONFIDENCE GATE LAYER                              │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  Gate Logic Evaluator       │
+                    │  - Check confidence ≥ 0.85  │
+                    │  - Verify required fields   │
+                    │  - Validate entity count    │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  GateDecision               │
+                    │  {                          │
+                    │    "decision": "auto_accept"│
+                    │    "confidence": 0.87,      │
+                    │    "rationale": "..."       │
+                    │  }                          │
+                    └──────────────┬──────────────┘
+                                   │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       ATOMIZATION LAYER                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  Batch Processor            │
+                    │  - Group chunks             │
+                    │  - Manage rate limits       │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  Prompt Builder             │
+                    │  - Inject schema context    │
+                    │  - Add examples             │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  LLM (GPT-4/Claude)         │
+                    │  + Atomization Prompt       │
+                    │  - Extract requirements     │
+                    │  - Apply rule types         │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  Response Parser            │
+                    │  - Parse JSON               │
+                    │  - Validate schema          │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  Schema Repairer            │
+                    │  - Fix partial outputs      │
+                    │  - Fill missing fields      │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  Confidence Scorer          │
+                    │  - 6 scoring factors        │
+                    │  - Weighted calculation     │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼─────────────────────────┐
+                    │  RegulatoryRequirements (List)         │
+                    │  [                                     │
+                    │    {                                   │
+                    │      "requirement_id": "DQ-001",       │
+                    │      "rule_type": "data_quality_...",  │
+                    │      "description": "Accuracy ≥95%",   │
+                    │      "grounded_in": "source text...",  │
+                    │      "confidence": 0.85,               │
+                    │      "attributes": {...},              │
+                    │      "metadata": {...}                 │
+                    │    },                                  │
+                    │    ...                                 │
+                    │  ]                                     │
+                    └──────────────┬─────────────────────────┘
+                                   │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    QUALITY EVALUATION LAYER                              │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+         ┌─────────────────────────┴──────────────────────────┐
+         │                                                     │
+    ┌────▼────┐  ┌───────────┐  ┌──────────────┐  ┌──────────▼─────┐
+    │Grounding│  │Testability│  │Hallucination │  │ Deduplication  │
+    │  Check  │  │   Check   │  │    Check     │  │     Check      │
+    └────┬────┘  └─────┬─────┘  └──────┬───────┘  └───────┬────────┘
+         │             │                │                  │
+         └─────────────┼────────────────┼──────────────────┘
+                       │                │
+              ┌────────▼────────┐  ┌────▼────────────┐
+              │ Schema          │  │   Coverage      │
+              │ Compliance      │  │   Analysis      │
+              └────────┬────────┘  └────┬────────────┘
+                       │                │
+                       └────────┬───────┘
+                                │
+                    ┌───────────▼────────────────────────────┐
+                    │  EvalReport                            │
+                    │  {                                     │
+                    │    "total_requirements": 127,          │
+                    │    "passed": 98,                       │
+                    │    "failed": 29,                       │
+                    │    "quality_score": 0.77,              │
+                    │    "failures_by_severity": {           │
+                    │      "critical": 2,                    │
+                    │      "high": 5,                        │
+                    │      "medium": 14,                     │
+                    │      "low": 8                          │
+                    │    },                                  │
+                    │    "detailed_failures": [...]          │
+                    │  }                                     │
+                    └────────────────────────────────────────┘
+                                   │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          OUTPUT LAYER                                    │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  JSON Output Files          │
+                    │  - requirements.json        │
+                    │  - eval_report.json         │
+                    │  - metadata.json            │
+                    └─────────────────────────────┘
+```
 
 ### Core Components
 
@@ -1379,6 +1920,1722 @@ rule = Rule(
 )
 ```
 
+## Complete API Reference
+
+This section provides detailed API documentation for programmatic usage of kratos-discover components.
+
+### CLI Module (`src.cli`)
+
+#### Main Entry Point
+
+```python
+def main():
+    """Main CLI entry point with argument parsing."""
+```
+
+**Subcommands**:
+- `run` - Default rule/GRC extraction
+- `preprocess` - Deterministic document parsing
+- `discover-schema` - Schema discovery
+- `atomize` - Complete Agent1 pipeline
+
+#### LLM Builder
+
+```python
+def _build_llm(provider: str, model_name: str = None) -> BaseChatModel:
+    """
+    Factory method to create LLM instances.
+    
+    Args:
+        provider: "openai" or "anthropic"
+        model_name: Model identifier (optional, uses env default)
+    
+    Returns:
+        BaseChatModel: LangChain LLM instance
+    
+    Supported Models:
+        OpenAI: gpt-4, gpt-4-turbo, gpt-4o, gpt-4o-mini
+        Anthropic: claude-3-opus-20240229, claude-3-sonnet-20240229, 
+                   claude-3-5-sonnet-20240229, claude-3-haiku-20240307
+    
+    Example:
+        llm = _build_llm("anthropic", "claude-3-5-sonnet-20240229")
+    """
+```
+
+### Agent1 Preprocessor (`agent1.nodes.preprocessor`)
+
+#### parse_and_chunk
+
+```python
+def parse_and_chunk(
+    file_path: Path,
+    file_type: str,
+    max_chunk_chars: int = 3000,
+    min_chunk_chars: int = 50
+) -> PreprocessorOutput:
+    """
+    Parse document and chunk into structured content blocks.
+    
+    Args:
+        file_path: Path to document file
+        file_type: "docx", "xlsx", or "csv"
+        max_chunk_chars: Maximum characters per chunk (default: 3000)
+        min_chunk_chars: Minimum characters per chunk (default: 50)
+    
+    Returns:
+        PreprocessorOutput with:
+            - chunks: List[ContentChunk]
+            - document_stats: Dict with word_count, page_count, table_count
+            - total_chunks: int
+    
+    Raises:
+        FileNotFoundError: If file_path doesn't exist
+        NotImplementedError: If file_type is "xlsx" or "csv"
+    
+    Example:
+        from pathlib import Path
+        from agent1.nodes.preprocessor import parse_and_chunk
+        
+        result = parse_and_chunk(
+            file_path=Path("document.docx"),
+            file_type="docx",
+            max_chunk_chars=2000
+        )
+        print(f"Created {result.total_chunks} chunks")
+        for chunk in result.chunks[:5]:
+            print(f"{chunk.chunk_id}: {chunk.chunk_type}")
+    """
+```
+
+### Agent1 Schema Discovery (`agent1.nodes.schema_discovery`)
+
+#### schema_discovery_agent
+
+```python
+def schema_discovery_agent(
+    chunks: List[ContentChunk],
+    llm: BaseChatModel
+) -> SchemaMap:
+    """
+    Infer document structure using LLM analysis.
+    
+    Args:
+        chunks: List of preprocessed content chunks
+        llm: LangChain LLM instance (Claude recommended)
+    
+    Returns:
+        SchemaMap with:
+            - structural_pattern: "vertical_table" | "horizontal_table" | 
+                                 "prose_with_tables" | "spreadsheet" | "mixed"
+            - entities: List[Entity] with fields and confidence scores
+            - relationships: List[Relationship] between entities
+            - anomalies: List[str] describing structural issues
+            - confidence_avg: float (0.0 to 1.0)
+    
+    Example:
+        from agent1.nodes.schema_discovery import schema_discovery_agent
+        from src.cli import _build_llm
+        
+        llm = _build_llm("anthropic", "claude-3-sonnet-20240229")
+        schema = schema_discovery_agent(chunks, llm)
+        
+        print(f"Pattern: {schema.structural_pattern}")
+        print(f"Entities: {len(schema.entities)}")
+        print(f"Confidence: {schema.confidence_avg:.2f}")
+    """
+```
+
+### Agent1 Confidence Gate (`agent1.nodes.confidence_gate`)
+
+#### check_confidence
+
+```python
+def check_confidence(
+    schema: SchemaMap,
+    config_path: Path = None
+) -> GateDecision:
+    """
+    Evaluate schema quality and make gate decision.
+    
+    Args:
+        schema: SchemaMap from discovery stage
+        config_path: Optional path to gate_config.yaml (default: uses built-in)
+    
+    Returns:
+        GateDecision with:
+            - decision: "auto_accept" | "human_review" | "reject"
+            - confidence_score: float
+            - failing_checks: List[str]
+            - rationale: str explaining the decision
+    
+    Decision Logic:
+        - confidence >= 0.85: auto_accept
+        - confidence >= 0.50: human_review
+        - confidence < 0.50 AND has required fields: human_review
+        - otherwise: reject
+    
+    Example:
+        from agent1.nodes.confidence_gate import check_confidence
+        
+        gate_decision = check_confidence(schema)
+        
+        if gate_decision.decision == "reject":
+            print(f"Rejected: {gate_decision.rationale}")
+            sys.exit(1)
+        elif gate_decision.decision == "human_review":
+            print(f"Warning: {gate_decision.rationale}")
+    """
+```
+
+### Agent1 Atomizer (`agent1.nodes.atomizer`)
+
+#### RequirementAtomizerNode
+
+```python
+class RequirementAtomizerNode:
+    """
+    Extracts atomic regulatory requirements with confidence scoring.
+    
+    Attributes:
+        llm: LangChain LLM instance
+        prompt_registry: PromptRegistry for versioned prompts
+        batch_processor: BatchProcessor for efficient API calls
+        response_parser: ResponseParser for JSON parsing
+        schema_repairer: SchemaRepairer for error recovery
+    """
+    
+    def __init__(
+        self,
+        llm: BaseChatModel,
+        prompt_registry: PromptRegistry
+    ):
+        """Initialize atomizer with LLM and prompt registry."""
+    
+    def atomize(
+        self,
+        chunks: List[ContentChunk],
+        schema: SchemaMap
+    ) -> List[RegulatoryRequirement]:
+        """
+        Extract requirements from chunks using schema context.
+        
+        Args:
+            chunks: Preprocessed content chunks
+            schema: Discovered schema from Node 2
+        
+        Returns:
+            List of RegulatoryRequirement objects with:
+                - requirement_id: str (e.g., "DQ-001")
+                - rule_type: RuleType enum value
+                - category: "rule" | "control" | "risk"
+                - description: str
+                - grounded_in: str (source text)
+                - confidence: float (0.0 to 1.0)
+                - attributes: Dict[str, Any]
+                - metadata: Dict[str, Any]
+        
+        Example:
+            from agent1.nodes.atomizer import RequirementAtomizerNode
+            from agent1.prompts.registry import PromptRegistry
+            
+            registry = PromptRegistry(base_dir=Path("prompts"))
+            atomizer = RequirementAtomizerNode(llm, registry)
+            
+            requirements = atomizer.atomize(chunks, schema)
+            print(f"Extracted {len(requirements)} requirements")
+            
+            high_conf = [r for r in requirements if r.confidence >= 0.85]
+            print(f"High confidence: {len(high_conf)}")
+        """
+```
+
+### Agent1 Evaluation (`agent1.eval.eval_node`)
+
+#### eval_quality
+
+```python
+def eval_quality(
+    requirements: List[RegulatoryRequirement],
+    chunks: List[ContentChunk],
+    schema: SchemaMap
+) -> EvalReport:
+    """
+    Run comprehensive quality checks on extracted requirements.
+    
+    Args:
+        requirements: Extracted requirements from atomizer
+        chunks: Original content chunks for grounding check
+        schema: Schema map for compliance check
+    
+    Returns:
+        EvalReport with:
+            - total_requirements: int
+            - passed: int
+            - failed: int
+            - failures_by_check: Dict[str, int]
+            - failures_by_severity: Dict[str, int]
+            - quality_score: float (0.0 to 1.0)
+            - detailed_failures: List[FailureDetail]
+            - coverage_metrics: Dict
+    
+    Quality Checks:
+        1. Grounding (HIGH): Verifies text exists in source
+        2. Testability (MEDIUM): Detects vague language
+        3. Hallucination (CRITICAL): Identifies fabricated content
+        4. Deduplication (LOW): Finds near-duplicates
+        5. Schema Compliance (MEDIUM): Validates against schema
+        6. Coverage (INFO): Measures extraction completeness
+    
+    Example:
+        from agent1.eval.eval_node import eval_quality
+        
+        eval_report = eval_quality(requirements, chunks, schema)
+        
+        print(f"Quality Score: {eval_report.quality_score:.2%}")
+        print(f"Passed: {eval_report.passed}/{eval_report.total_requirements}")
+        
+        if eval_report.failures_by_severity.get("critical", 0) > 0:
+            print("⚠️  CRITICAL failures detected:")
+            for failure in eval_report.detailed_failures:
+                if failure.severity == "critical":
+                    print(f"  - {failure.requirement_id}: {failure.reason}")
+    """
+```
+
+### Scoring Module (`agent1.scoring`)
+
+#### ConfidenceScorer
+
+```python
+class ConfidenceScorer:
+    """
+    Multi-factor confidence scoring for requirements.
+    
+    Scoring Factors (weights):
+        1. Grounding Match (40%): Text similarity to source
+        2. Completeness (20%): All required fields present
+        3. Quantification (15%): Contains measurable criteria
+        4. Schema Compliance (10%): Matches expected schema
+        5. Coherence (10%): Logical and clear text
+        6. Domain Signals (5%): Domain-specific keywords
+    """
+    
+    def score(
+        self,
+        requirement: RegulatoryRequirement,
+        source_text: str,
+        schema: SchemaMap
+    ) -> float:
+        """
+        Calculate confidence score for a requirement.
+        
+        Args:
+            requirement: The requirement to score
+            source_text: Original source text for grounding
+            schema: Schema for compliance check
+        
+        Returns:
+            float: Confidence score from 0.0 to 1.0
+        
+        Example:
+            from agent1.scoring.confidence_scorer import ConfidenceScorer
+            
+            scorer = ConfidenceScorer()
+            confidence = scorer.score(requirement, source_chunk.text, schema)
+            
+            if confidence >= 0.85:
+                print("✓ High confidence extraction")
+            elif confidence >= 0.70:
+                print("⚠ Medium confidence - review recommended")
+            else:
+                print("✗ Low confidence - needs review")
+        """
+```
+
+#### GroundingVerifier
+
+```python
+class GroundingVerifier:
+    """
+    Verifies extractions against source text to prevent hallucinations.
+    """
+    
+    def verify(
+        self,
+        extracted_text: str,
+        source_chunks: List[ContentChunk],
+        threshold: float = 0.70
+    ) -> Tuple[bool, float, str]:
+        """
+        Verify extracted text exists in source.
+        
+        Args:
+            extracted_text: The text to verify (e.g., requirement description)
+            source_chunks: Original content chunks
+            threshold: Minimum similarity score (0.0 to 1.0)
+        
+        Returns:
+            Tuple of (is_grounded, similarity_score, matching_chunk_id)
+        
+        Example:
+            from agent1.scoring.grounding import GroundingVerifier
+            
+            verifier = GroundingVerifier()
+            is_grounded, score, chunk_id = verifier.verify(
+                requirement.description,
+                chunks,
+                threshold=0.75
+            )
+            
+            if not is_grounded:
+                print(f"⚠️  Not grounded (score: {score:.2f})")
+            else:
+                print(f"✓ Grounded in {chunk_id} (score: {score:.2f})")
+        """
+```
+
+### Prompt Registry (`src.prompts.registry`)
+
+#### PromptRegistry
+
+```python
+class PromptRegistry:
+    """
+    Manages versioned LLM prompts stored as YAML files.
+    
+    Features:
+        - Version control for prompts
+        - Active version tracking
+        - Dynamic prompt loading
+        - Template rendering
+    """
+    
+    def __init__(self, base_dir: Path):
+        """
+        Initialize registry with prompt directory.
+        
+        Args:
+            base_dir: Root directory containing prompts/
+        """
+    
+    def get_active_prompt(self, name: str) -> str:
+        """
+        Get the currently active prompt version.
+        
+        Args:
+            name: Prompt name (e.g., "rule_extraction", "requirement_atomizer")
+        
+        Returns:
+            str: Fully rendered prompt text
+        
+        Raises:
+            ValueError: If prompt name not found
+        
+        Example:
+            from pathlib import Path
+            from agent1.prompts.registry import PromptRegistry
+            
+            registry = PromptRegistry(base_dir=Path("."))
+            prompt = registry.get_active_prompt("requirement_atomizer")
+            
+            # Use in LLM call
+            response = llm.invoke(prompt)
+        """
+    
+    def get_prompt(self, name: str, version: str) -> str:
+        """Get specific prompt version."""
+    
+    def set_active_version(self, name: str, version: str):
+        """Change active version for a prompt."""
+    
+    def list_versions(self, name: str) -> List[str]:
+        """List all available versions for a prompt."""
+```
+
+### Data Models API
+
+#### ContentChunk
+
+```python
+@dataclass
+class ContentChunk:
+    """
+    Represents a parsed document chunk.
+    
+    Attributes:
+        chunk_id: Unique identifier (e.g., "chunk_001")
+        chunk_type: "prose" | "heading" | "list" | "table"
+        text: Actual content text
+        metadata: Dict with page, heading, table_data, etc.
+    """
+    chunk_id: str
+    chunk_type: str
+    text: str
+    metadata: Dict[str, Any]
+```
+
+#### SchemaMap
+
+```python
+@dataclass
+class SchemaMap:
+    """
+    Document structure schema.
+    
+    Attributes:
+        structural_pattern: Overall document structure type
+        entities: List[Entity] - discovered entities
+        relationships: List[Relationship] - connections between entities
+        anomalies: List[str] - detected issues
+        confidence_avg: Average confidence across all fields
+    """
+    structural_pattern: str
+    entities: List[Entity]
+    relationships: List[Relationship]
+    anomalies: List[str]
+    confidence_avg: float
+```
+
+#### RegulatoryRequirement
+
+```python
+@dataclass
+class RegulatoryRequirement:
+    """
+    Atomic regulatory requirement.
+    
+    Attributes:
+        requirement_id: Unique ID with type prefix (e.g., "DQ-001")
+        rule_type: RuleType enum value
+        category: "rule" | "control" | "risk"
+        description: Human-readable requirement text
+        grounded_in: Source text excerpt
+        confidence: Score from 0.0 to 1.0
+        attributes: Dict of extracted attributes
+        metadata: Dict with extraction metadata
+    """
+    requirement_id: str
+    rule_type: RuleType
+    category: str
+    description: str
+    grounded_in: str
+    confidence: float
+    attributes: Dict[str, Any]
+    metadata: Dict[str, Any]
+```
+
+## Configuration Guide
+
+### Complete Configuration Options
+
+#### Environment Variables Reference
+
+```bash
+# === LLM Provider Configuration ===
+# OpenAI Configuration
+OPENAI_API_KEY=sk-...                    # Required for OpenAI
+OPENAI_MODEL=gpt-4o-mini                 # Default: gpt-4o-mini
+OPENAI_TEMPERATURE=0.0                   # Default: 0.0 (deterministic)
+OPENAI_MAX_TOKENS=4096                   # Default: 4096
+OPENAI_TIMEOUT=120                       # Timeout in seconds
+
+# Anthropic Configuration
+ANTHROPIC_API_KEY=sk-ant-...             # Required for Anthropic
+CLAUDE_MODEL=claude-3-sonnet-20240229    # Default: claude-3-sonnet
+ANTHROPIC_TEMPERATURE=0.0                # Default: 0.0 (deterministic)
+ANTHROPIC_MAX_TOKENS=4096                # Default: 4096
+ANTHROPIC_TIMEOUT=120                    # Timeout in seconds
+
+# Default Provider
+LLM_PROVIDER=anthropic                   # "openai" or "anthropic"
+
+# === Document Processing Configuration ===
+MAX_CHUNK_SIZE=3000                      # Maximum chunk size in characters
+MIN_CHUNK_SIZE=50                        # Minimum chunk size in characters
+CHUNK_OVERLAP=100                        # Overlap between chunks
+PREPROCESSING_MODE=standard              # "standard" or "aggressive"
+
+# === Agent1 Pipeline Configuration ===
+SCHEMA_DISCOVERY_TIMEOUT=180             # Schema discovery timeout (seconds)
+CONFIDENCE_GATE_THRESHOLD=0.85           # Auto-accept threshold
+HUMAN_REVIEW_THRESHOLD=0.50              # Human review threshold
+ATOMIZER_BATCH_SIZE=10                   # Chunks per batch
+ATOMIZER_MAX_RETRIES=3                   # Retry failed batches
+EVAL_GROUNDING_THRESHOLD=0.70            # Grounding similarity threshold
+EVAL_DEDUP_THRESHOLD=0.85                # Deduplication similarity threshold
+
+# === Output Configuration ===
+OUTPUT_DIR=outputs                       # Default output directory
+OUTPUT_FORMAT=json                       # "json" or "yaml"
+SAVE_INTERMEDIATE_ARTIFACTS=false        # Save debug artifacts
+PRETTY_PRINT_JSON=true                   # Format JSON output
+
+# === Logging Configuration ===
+LOG_LEVEL=INFO                           # DEBUG, INFO, WARNING, ERROR
+LOG_FORMAT=json                          # "json" or "text"
+LOG_FILE=logs/kratos.log                 # Log file path
+ENABLE_STRUCTURED_LOGGING=true           # Use structlog
+
+# === Performance Configuration ===
+ENABLE_CACHING=true                      # Enable schema caching
+CACHE_TTL=3600                          # Cache time-to-live (seconds)
+PARALLEL_PROCESSING=false                # Process chunks in parallel
+MAX_WORKERS=4                            # Workers for parallel mode
+
+# === Debug Configuration ===
+DEBUG_MODE=false                         # Enable debug output
+VERBOSE_ERRORS=false                     # Show full stack traces
+SAVE_LLM_RESPONSES=false                 # Save raw LLM responses
+```
+
+#### YAML Configuration Files
+
+##### Gate Configuration (`agent1/config/gate_config.yaml`)
+
+```yaml
+# Confidence gate thresholds
+thresholds:
+  auto_accept: 0.85        # >= 0.85: proceed automatically
+  human_review: 0.50       # >= 0.50: flag for review
+  schema_compliance: 0.50  # minimum schema quality
+
+# Required fields check
+required_fields:
+  - requirement_id
+  - description
+  - rule_type
+
+# Minimum entity count
+min_entities: 1
+
+# Scoring weights
+weights:
+  confidence: 0.60         # Field confidence weight
+  completeness: 0.25       # Required fields weight
+  entity_count: 0.15       # Number of entities weight
+```
+
+##### Prompt Registry (`prompts/registry.yaml`)
+
+```yaml
+# Active prompt versions
+active_versions:
+  rule_extraction: "v1.2"
+  grc_extraction: "v1.1"
+  requirement_atomizer: "v1.0"
+  schema_discovery: "v1.0"
+
+# Prompt metadata
+prompts:
+  rule_extraction:
+    description: "Extract regulatory rules from compliance documents"
+    versions:
+      - "v1.0"  # Initial version
+      - "v1.1"  # Added anti-patterns
+      - "v1.2"  # Improved rule types
+
+  requirement_atomizer:
+    description: "Extract atomic requirements with schema context"
+    versions:
+      - "v1.0"  # Production version
+      - "v1.0_retry"  # Retry logic for failures
+```
+
+### Configuration Profiles
+
+Create different configuration profiles for different use cases:
+
+#### Development Profile (`.env.dev`)
+
+```bash
+LLM_PROVIDER=anthropic
+CLAUDE_MODEL=claude-3-haiku-20240307     # Faster, cheaper
+LOG_LEVEL=DEBUG
+DEBUG_MODE=true
+SAVE_INTERMEDIATE_ARTIFACTS=true
+PRETTY_PRINT_JSON=true
+MAX_CHUNK_SIZE=2000                      # Smaller for testing
+```
+
+#### Production Profile (`.env.prod`)
+
+```bash
+LLM_PROVIDER=anthropic
+CLAUDE_MODEL=claude-3-opus-20240229      # Best quality
+LOG_LEVEL=INFO
+DEBUG_MODE=false
+SAVE_INTERMEDIATE_ARTIFACTS=false
+PRETTY_PRINT_JSON=false
+MAX_CHUNK_SIZE=3000
+ENABLE_CACHING=true
+PARALLEL_PROCESSING=true
+MAX_WORKERS=8
+```
+
+#### Cost-Optimized Profile (`.env.cost`)
+
+```bash
+LLM_PROVIDER=openai
+OPENAI_MODEL=gpt-4o-mini                 # Most cost-effective
+LOG_LEVEL=WARNING
+SAVE_INTERMEDIATE_ARTIFACTS=false
+MAX_CHUNK_SIZE=3000
+ATOMIZER_BATCH_SIZE=20                   # Larger batches
+ENABLE_CACHING=true
+```
+
+### Using Configuration Profiles
+
+```bash
+# Load specific profile
+cp .env.prod .env
+python -m src.cli atomize --input document.docx
+
+# Override with environment variables
+LLM_PROVIDER=openai python -m src.cli atomize --input document.docx
+
+# Override with CLI flags
+python -m src.cli atomize --input document.docx --provider anthropic
+```
+
+## Advanced Usage
+
+### Custom Extraction Workflows
+
+#### Batch Processing Multiple Documents
+
+```python
+from pathlib import Path
+from src.cli import _build_llm
+from agent1.nodes.preprocessor import parse_and_chunk
+from agent1.nodes.atomizer import RequirementAtomizerNode
+
+# Initialize once
+llm = _build_llm("anthropic", "claude-3-sonnet-20240229")
+atomizer = RequirementAtomizerNode(llm, prompt_registry)
+
+# Process multiple documents
+documents = Path("data/").glob("*.docx")
+all_requirements = []
+
+for doc in documents:
+    print(f"Processing {doc.name}...")
+    
+    # Preprocess
+    result = parse_and_chunk(doc, "docx")
+    
+    # Discover schema (cached if similar structure)
+    schema = schema_discovery_agent(result.chunks, llm)
+    
+    # Extract requirements
+    requirements = atomizer.atomize(result.chunks, schema)
+    all_requirements.extend(requirements)
+    
+    print(f"  Extracted {len(requirements)} requirements")
+
+print(f"Total: {len(all_requirements)} requirements from {len(list(documents))} documents")
+```
+
+#### Custom Confidence Threshold Filtering
+
+```python
+from agent1.eval.eval_node import eval_quality
+
+# Extract requirements
+requirements = atomizer.atomize(chunks, schema)
+
+# Evaluate quality
+eval_report = eval_quality(requirements, chunks, schema)
+
+# Filter by confidence and quality
+high_quality = [
+    req for req in requirements
+    if req.confidence >= 0.85
+    and req.requirement_id not in [f.requirement_id for f in eval_report.detailed_failures if f.severity in ["critical", "high"]]
+]
+
+medium_quality = [
+    req for req in requirements
+    if 0.70 <= req.confidence < 0.85
+]
+
+needs_review = [
+    req for req in requirements
+    if req.confidence < 0.70
+]
+
+print(f"High quality: {len(high_quality)}")
+print(f"Medium quality: {len(medium_quality)}")
+print(f"Needs review: {len(needs_review)}")
+```
+
+#### Custom Rule Type Detection
+
+```python
+from src.shared.models import RuleType, RULE_TYPE_CODES
+
+# Add custom rule type logic
+def classify_requirement(requirement: RegulatoryRequirement) -> RuleType:
+    """Custom classification logic"""
+    text = requirement.description.lower()
+    
+    # Check for quantitative thresholds
+    if any(keyword in text for keyword in ["must be", "≥", ">=", "%", "threshold"]):
+        return RuleType.DATA_QUALITY_THRESHOLD
+    
+    # Check for documentation keywords
+    elif any(keyword in text for keyword in ["document", "record", "maintain", "file"]):
+        return RuleType.DOCUMENTATION_REQUIREMENT
+    
+    # Check for timeline keywords
+    elif any(keyword in text for keyword in ["within", "days", "annual", "monthly", "deadline"]):
+        return RuleType.UPDATE_TIMELINE
+    
+    # Default
+    return RuleType.UPDATE_REQUIREMENT
+
+# Apply to requirements
+for req in requirements:
+    if not req.rule_type:
+        req.rule_type = classify_requirement(req)
+```
+
+### Integration with External Systems
+
+#### Export to CSV for Excel
+
+```python
+import csv
+from pathlib import Path
+
+def export_to_csv(requirements: List[RegulatoryRequirement], output_path: Path):
+    """Export requirements to CSV format."""
+    with open(output_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        
+        # Header
+        writer.writerow([
+            "ID", "Type", "Category", "Description", 
+            "Confidence", "Source Text", "Attributes"
+        ])
+        
+        # Data rows
+        for req in requirements:
+            writer.writerow([
+                req.requirement_id,
+                req.rule_type.value,
+                req.category,
+                req.description,
+                f"{req.confidence:.2f}",
+                req.grounded_in[:200],  # Truncate long text
+                str(req.attributes)
+            ])
+
+# Usage
+export_to_csv(requirements, Path("outputs/requirements.csv"))
+```
+
+#### Integration with GRC Platform APIs
+
+```python
+import requests
+from typing import List
+
+def upload_to_grc_platform(
+    requirements: List[RegulatoryRequirement],
+    api_url: str,
+    api_key: str
+):
+    """Upload requirements to external GRC platform."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    # Convert to platform format
+    payload = {
+        "requirements": [
+            {
+                "external_id": req.requirement_id,
+                "title": req.description[:100],
+                "description": req.description,
+                "type": req.rule_type.value,
+                "category": req.category,
+                "confidence_score": req.confidence,
+                "source_reference": req.grounded_in,
+                "custom_attributes": req.attributes,
+                "metadata": req.metadata
+            }
+            for req in requirements
+        ]
+    }
+    
+    # Upload
+    response = requests.post(
+        f"{api_url}/api/v1/requirements/bulk",
+        headers=headers,
+        json=payload
+    )
+    
+    if response.status_code == 200:
+        print(f"✓ Uploaded {len(requirements)} requirements")
+    else:
+        print(f"✗ Upload failed: {response.status_code}")
+        print(response.text)
+
+# Usage
+upload_to_grc_platform(
+    requirements,
+    api_url="https://grc-platform.example.com",
+    api_key=os.getenv("GRC_API_KEY")
+)
+```
+
+#### Database Integration
+
+```python
+import sqlite3
+from datetime import datetime
+
+def save_to_database(requirements: List[RegulatoryRequirement], db_path: str):
+    """Save requirements to SQLite database."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Create table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS requirements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requirement_id TEXT UNIQUE,
+            rule_type TEXT,
+            category TEXT,
+            description TEXT,
+            grounded_in TEXT,
+            confidence REAL,
+            attributes TEXT,
+            metadata TEXT,
+            created_at TIMESTAMP
+        )
+    """)
+    
+    # Insert requirements
+    for req in requirements:
+        cursor.execute("""
+            INSERT OR REPLACE INTO requirements 
+            (requirement_id, rule_type, category, description, grounded_in, 
+             confidence, attributes, metadata, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            req.requirement_id,
+            req.rule_type.value,
+            req.category,
+            req.description,
+            req.grounded_in,
+            req.confidence,
+            str(req.attributes),
+            str(req.metadata),
+            datetime.utcnow()
+        ))
+    
+    conn.commit()
+    conn.close()
+    print(f"✓ Saved {len(requirements)} requirements to {db_path}")
+
+# Usage
+save_to_database(requirements, "outputs/requirements.db")
+```
+
+## Performance Optimization
+
+### Chunking Strategy Optimization
+
+#### Choosing Optimal Chunk Size
+
+```python
+# For dense regulatory text with short requirements
+MAX_CHUNK_SIZE = 2000  # Smaller chunks, more precise extraction
+MIN_CHUNK_SIZE = 100
+
+# For narrative documents with long requirements
+MAX_CHUNK_SIZE = 4000  # Larger chunks, preserve context
+MIN_CHUNK_SIZE = 200
+
+# For tables and structured data
+MAX_CHUNK_SIZE = 5000  # Very large chunks, preserve table structure
+MIN_CHUNK_SIZE = 50
+```
+
+#### Performance vs. Cost Trade-offs
+
+```python
+import time
+
+def benchmark_extraction(
+    file_path: Path,
+    chunk_sizes: List[int],
+    provider: str
+):
+    """Benchmark different chunk sizes."""
+    results = []
+    
+    for max_size in chunk_sizes:
+        start = time.time()
+        
+        # Preprocess with specific chunk size
+        result = parse_and_chunk(file_path, "docx", max_chunk_chars=max_size)
+        
+        # Extract requirements
+        llm = _build_llm(provider)
+        requirements = atomizer.atomize(result.chunks, schema)
+        
+        elapsed = time.time() - start
+        
+        results.append({
+            "chunk_size": max_size,
+            "num_chunks": result.total_chunks,
+            "num_requirements": len(requirements),
+            "time_seconds": elapsed,
+            "cost_estimate": result.total_chunks * 0.015  # $0.015 per chunk est.
+        })
+    
+    return results
+
+# Run benchmark
+results = benchmark_extraction(
+    Path("data/document.docx"),
+    chunk_sizes=[1000, 2000, 3000, 4000],
+    provider="anthropic"
+)
+
+for r in results:
+    print(f"Chunk Size: {r['chunk_size']}")
+    print(f"  Chunks: {r['num_chunks']}, Requirements: {r['num_requirements']}")
+    print(f"  Time: {r['time_seconds']:.1f}s, Est. Cost: ${r['cost_estimate']:.2f}")
+```
+
+### Caching Strategies
+
+#### Schema Caching for Similar Documents
+
+```python
+from agent1.cache.schema_cache import SchemaCache
+
+# Initialize cache
+cache = SchemaCache(cache_dir=Path(".cache"))
+
+# Check cache before discovery
+schema = cache.get(document_hash)
+if schema is None:
+    # Not in cache, discover
+    schema = schema_discovery_agent(chunks, llm)
+    
+    # Save to cache
+    cache.set(document_hash, schema, ttl=3600)
+    print("Schema discovered and cached")
+else:
+    print("Schema loaded from cache")
+```
+
+#### LLM Response Caching
+
+```python
+from functools import lru_cache
+import hashlib
+
+@lru_cache(maxsize=128)
+def cached_llm_call(prompt_hash: str, llm_provider: str) -> str:
+    """Cache LLM responses for identical prompts."""
+    llm = _build_llm(llm_provider)
+    response = llm.invoke(prompt_hash)
+    return response
+
+# Usage
+prompt_hash = hashlib.md5(prompt.encode()).hexdigest()
+response = cached_llm_call(prompt_hash, "anthropic")
+```
+
+### Parallel Processing
+
+#### Process Multiple Documents in Parallel
+
+```python
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+def process_document(file_path: Path) -> List[RegulatoryRequirement]:
+    """Process single document (thread-safe)."""
+    # Each thread gets its own LLM instance
+    llm = _build_llm("anthropic")
+    
+    result = parse_and_chunk(file_path, "docx")
+    schema = schema_discovery_agent(result.chunks, llm)
+    requirements = atomizer.atomize(result.chunks, schema)
+    
+    return requirements
+
+def process_batch(file_paths: List[Path], max_workers: int = 4):
+    """Process multiple documents in parallel."""
+    all_requirements = []
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        futures = {
+            executor.submit(process_document, path): path
+            for path in file_paths
+        }
+        
+        # Collect results as they complete
+        for future in as_completed(futures):
+            path = futures[future]
+            try:
+                requirements = future.result()
+                all_requirements.extend(requirements)
+                print(f"✓ {path.name}: {len(requirements)} requirements")
+            except Exception as e:
+                print(f"✗ {path.name}: {str(e)}")
+    
+    return all_requirements
+
+# Usage
+documents = list(Path("data/").glob("*.docx"))
+requirements = process_batch(documents, max_workers=4)
+print(f"Total: {len(requirements)} requirements")
+```
+
+### Model Selection Guidelines
+
+| Use Case | Recommended Model | Rationale |
+|----------|-------------------|-----------|
+| **Development/Testing** | Claude Haiku | Fastest, cheapest, good for iteration |
+| **Production (Quality)** | Claude Opus | Best accuracy, grounding, reasoning |
+| **Production (Balanced)** | Claude Sonnet | Good balance of speed/cost/quality |
+| **Production (Cost)** | GPT-4o-mini | Most cost-effective, decent quality |
+| **Complex Documents** | Claude Opus or GPT-4 | Better at understanding complex structures |
+| **Simple Documents** | Claude Haiku or GPT-4o-mini | Sufficient for straightforward text |
+
+### Cost Optimization
+
+```python
+# Calculate estimated cost
+def estimate_cost(
+    num_chunks: int,
+    model: str,
+    avg_chunk_size: int = 2000
+) -> float:
+    """Estimate processing cost."""
+    # Cost per 1M tokens (approximate, 2024 pricing)
+    costs = {
+        "claude-3-opus": {"input": 15.00, "output": 75.00},
+        "claude-3-sonnet": {"input": 3.00, "output": 15.00},
+        "claude-3-haiku": {"input": 0.25, "output": 1.25},
+        "gpt-4": {"input": 30.00, "output": 60.00},
+        "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+        "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    }
+    
+    # Estimate tokens (rough: 1 token ≈ 4 chars)
+    input_tokens = (num_chunks * avg_chunk_size) / 4
+    output_tokens = num_chunks * 500  # Estimate 500 tokens per output
+    
+    model_cost = costs.get(model, costs["claude-3-sonnet"])
+    
+    total_cost = (
+        (input_tokens / 1_000_000) * model_cost["input"] +
+        (output_tokens / 1_000_000) * model_cost["output"]
+    )
+    
+    return total_cost
+
+# Usage
+num_chunks = 150
+print(f"Estimated costs for {num_chunks} chunks:")
+for model in ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "gpt-4o-mini"]:
+    cost = estimate_cost(num_chunks, model)
+    print(f"  {model}: ${cost:.2f}")
+```
+
+## Integration Patterns
+
+### Webhook Integration
+
+```python
+from flask import Flask, request, jsonify
+import os
+
+app = Flask(__name__)
+
+@app.route("/extract", methods=["POST"])
+def extract_endpoint():
+    """Webhook endpoint for document extraction."""
+    # Get uploaded file
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    
+    file = request.files['file']
+    file_path = Path(f"/tmp/{file.filename}")
+    file.save(file_path)
+    
+    try:
+        # Process document
+        result = parse_and_chunk(file_path, "docx")
+        schema = schema_discovery_agent(result.chunks, llm)
+        requirements = atomizer.atomize(result.chunks, schema)
+        eval_report = eval_quality(requirements, result.chunks, schema)
+        
+        # Return results
+        return jsonify({
+            "success": True,
+            "total_requirements": len(requirements),
+            "quality_score": eval_report.quality_score,
+            "requirements": [req.dict() for req in requirements],
+            "eval_report": eval_report.dict()
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+    finally:
+        # Cleanup
+        if file_path.exists():
+            file_path.unlink()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
+```
+
+### Message Queue Integration (Celery)
+
+```python
+from celery import Celery
+from pathlib import Path
+
+app = Celery('kratos', broker='redis://localhost:6379/0')
+
+@app.task
+def process_document_async(file_path: str, callback_url: str = None):
+    """Async task for document processing."""
+    # Process
+    result = parse_and_chunk(Path(file_path), "docx")
+    schema = schema_discovery_agent(result.chunks, llm)
+    requirements = atomizer.atomize(result.chunks, schema)
+    
+    # Save results
+    output_path = Path(f"outputs/{Path(file_path).stem}_requirements.json")
+    with open(output_path, 'w') as f:
+        json.dump([req.dict() for req in requirements], f, indent=2)
+    
+    # Callback if provided
+    if callback_url:
+        requests.post(callback_url, json={
+            "status": "complete",
+            "output_file": str(output_path),
+            "num_requirements": len(requirements)
+        })
+    
+    return str(output_path)
+
+# Usage
+result = process_document_async.delay(
+    file_path="/data/document.docx",
+    callback_url="https://api.example.com/webhook"
+)
+print(f"Task ID: {result.id}")
+```
+
+### REST API Integration
+
+```python
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks
+from fastapi.responses import JSONResponse
+import uuid
+
+app = FastAPI(title="Kratos-Discover API")
+
+# In-memory task store (use Redis in production)
+tasks = {}
+
+@app.post("/api/v1/extract")
+async def extract_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
+    """Upload document for extraction."""
+    # Generate task ID
+    task_id = str(uuid.uuid4())
+    tasks[task_id] = {"status": "processing", "progress": 0}
+    
+    # Save file
+    file_path = Path(f"/tmp/{task_id}_{file.filename}")
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+    
+    # Start background processing
+    background_tasks.add_task(process_in_background, task_id, file_path)
+    
+    return JSONResponse({
+        "task_id": task_id,
+        "status": "processing",
+        "status_url": f"/api/v1/status/{task_id}"
+    })
+
+@app.get("/api/v1/status/{task_id}")
+def get_status(task_id: str):
+    """Check extraction status."""
+    if task_id not in tasks:
+        return JSONResponse({"error": "Task not found"}, status_code=404)
+    
+    return JSONResponse(tasks[task_id])
+
+@app.get("/api/v1/results/{task_id}")
+def get_results(task_id: str):
+    """Get extraction results."""
+    if task_id not in tasks:
+        return JSONResponse({"error": "Task not found"}, status_code=404)
+    
+    task = tasks[task_id]
+    if task["status"] != "complete":
+        return JSONResponse({"error": "Task not complete"}, status_code=400)
+    
+    return JSONResponse(task["results"])
+
+def process_in_background(task_id: str, file_path: Path):
+    """Background processing task."""
+    try:
+        tasks[task_id]["progress"] = 20
+        result = parse_and_chunk(file_path, "docx")
+        
+        tasks[task_id]["progress"] = 40
+        schema = schema_discovery_agent(result.chunks, llm)
+        
+        tasks[task_id]["progress"] = 70
+        requirements = atomizer.atomize(result.chunks, schema)
+        
+        tasks[task_id]["progress"] = 90
+        eval_report = eval_quality(requirements, result.chunks, schema)
+        
+        tasks[task_id] = {
+            "status": "complete",
+            "progress": 100,
+            "results": {
+                "requirements": [req.dict() for req in requirements],
+                "eval_report": eval_report.dict()
+            }
+        }
+    
+    except Exception as e:
+        tasks[task_id] = {
+            "status": "failed",
+            "error": str(e)
+        }
+    
+    finally:
+        file_path.unlink()  # Cleanup
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+## Best Practices
+
+### Document Preparation
+
+#### Optimize Documents for Extraction
+
+1. **Clean Formatting**:
+   - Remove unnecessary formatting
+   - Use consistent heading styles (Heading 1, 2, 3)
+   - Avoid manual line breaks and spacing
+
+2. **Table Structure**:
+   - Use proper Word tables, not tabs/spaces
+   - Include clear headers
+   - Avoid merged cells when possible
+
+3. **Text Quality**:
+   - Fix OCR errors if document was scanned
+   - Ensure text is selectable (not images)
+   - Remove boilerplate headers/footers
+
+#### Document Quality Checklist
+
+```python
+def check_document_quality(file_path: Path) -> Dict[str, Any]:
+    """Pre-check document quality."""
+    from docx import Document
+    
+    doc = Document(file_path)
+    
+    checks = {
+        "has_headings": any(p.style.name.startswith("Heading") for p in doc.paragraphs),
+        "has_tables": len(doc.tables) > 0,
+        "has_text": any(p.text.strip() for p in doc.paragraphs),
+        "page_count": len(doc.sections),
+        "table_count": len(doc.tables),
+        "word_count": sum(len(p.text.split()) for p in doc.paragraphs),
+        "issues": []
+    }
+    
+    # Check for issues
+    if not checks["has_headings"]:
+        checks["issues"].append("No heading styles detected - may impact segmentation")
+    
+    if checks["word_count"] < 100:
+        checks["issues"].append("Document is very short - may not have enough content")
+    
+    if checks["word_count"] > 100000:
+        checks["issues"].append("Document is very large - consider splitting")
+    
+    return checks
+
+# Usage
+quality = check_document_quality(Path("document.docx"))
+if quality["issues"]:
+    print("⚠️  Quality issues:")
+    for issue in quality["issues"]:
+        print(f"  - {issue}")
+```
+
+### Prompt Engineering
+
+#### Effective Prompt Design
+
+1. **Be Specific**:
+   ```yaml
+   # Bad
+   instructions: "Extract rules from the document"
+   
+   # Good
+   instructions: |
+     Extract regulatory rules that:
+     1. Specify measurable requirements (e.g., ≥95% accuracy)
+     2. Include clear action verbs (must, shall, will)
+     3. Define specific entities (customers, accounts, records)
+     4. Contain compliance obligations
+   ```
+
+2. **Provide Examples**:
+   ```yaml
+   examples: |
+     Example 1:
+     Input: "Banks must maintain customer records with ≥95% accuracy."
+     Output:
+     {
+       "rule_id": "DQ-001",
+       "rule_type": "data_quality_threshold",
+       "description": "Customer records must have ≥95% accuracy",
+       "attributes": {"threshold": "95%", "metric": "accuracy", "applies_to": "customer records"}
+     }
+   ```
+
+3. **Define Anti-Patterns**:
+   ```yaml
+   anti_patterns: |
+     DO NOT extract:
+     - Examples or illustrations ("e.g., ...", "for example")
+     - Definitions or explanations
+     - Background information
+     - Aspirational statements ("should consider", "may want to")
+   ```
+
+### Error Handling
+
+#### Robust Error Handling Pattern
+
+```python
+import logging
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+def safe_extract(
+    file_path: Path,
+    max_retries: int = 3
+) -> Optional[List[RegulatoryRequirement]]:
+    """Extract with error handling and retries."""
+    for attempt in range(max_retries):
+        try:
+            # Preprocess
+            result = parse_and_chunk(file_path, "docx")
+            logger.info(f"Preprocessed: {result.total_chunks} chunks")
+            
+            # Discover schema
+            schema = schema_discovery_agent(result.chunks, llm)
+            logger.info(f"Discovered schema: confidence={schema.confidence_avg:.2f}")
+            
+            # Check confidence gate
+            gate_decision = check_confidence(schema)
+            if gate_decision.decision == "reject":
+                logger.error(f"Schema rejected: {gate_decision.rationale}")
+                return None
+            
+            # Extract
+            requirements = atomizer.atomize(result.chunks, schema)
+            logger.info(f"Extracted {len(requirements)} requirements")
+            
+            # Evaluate
+            eval_report = eval_quality(requirements, result.chunks, schema)
+            logger.info(f"Quality score: {eval_report.quality_score:.2%}")
+            
+            # Filter critical failures
+            if eval_report.failures_by_severity.get("critical", 0) > 0:
+                logger.warning("Critical quality failures detected")
+            
+            return requirements
+        
+        except FileNotFoundError:
+            logger.error(f"File not found: {file_path}")
+            return None
+        
+        except Exception as e:
+            logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying ({attempt + 2}/{max_retries})...")
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                logger.error("Max retries exceeded")
+                return None
+    
+    return None
+```
+
+### Quality Assurance
+
+#### Automated Quality Checks
+
+```python
+def validate_extraction_quality(
+    requirements: List[RegulatoryRequirement],
+    eval_report: EvalReport,
+    min_quality_score: float = 0.75
+) -> Tuple[bool, List[str]]:
+    """Validate extraction meets quality standards."""
+    issues = []
+    
+    # Check overall quality score
+    if eval_report.quality_score < min_quality_score:
+        issues.append(
+            f"Quality score {eval_report.quality_score:.2%} below minimum {min_quality_score:.2%}"
+        )
+    
+    # Check for critical failures
+    if eval_report.failures_by_severity.get("critical", 0) > 0:
+        issues.append(
+            f"{eval_report.failures_by_severity['critical']} critical failures detected"
+        )
+    
+    # Check minimum requirements extracted
+    if len(requirements) < 5:
+        issues.append(
+            f"Only {len(requirements)} requirements extracted - may be incomplete"
+        )
+    
+    # Check average confidence
+    avg_confidence = sum(r.confidence for r in requirements) / len(requirements)
+    if avg_confidence < 0.70:
+        issues.append(
+            f"Average confidence {avg_confidence:.2%} is low"
+        )
+    
+    # Check coverage
+    if eval_report.coverage_metrics.get("coverage_percentage", 0) < 60:
+        issues.append(
+            f"Coverage {eval_report.coverage_metrics['coverage_percentage']:.1f}% is low"
+        )
+    
+    is_valid = len(issues) == 0
+    return is_valid, issues
+
+# Usage
+is_valid, issues = validate_extraction_quality(requirements, eval_report)
+
+if not is_valid:
+    print("⚠️  Quality validation failed:")
+    for issue in issues:
+        print(f"  - {issue}")
+    print("\nRecommendations:")
+    print("  1. Try using Claude Opus for better quality")
+    print("  2. Review document quality and formatting")
+    print("  3. Adjust chunk sizes if needed")
+    print("  4. Check prompt versions")
+else:
+    print("✓ Quality validation passed")
+```
+
+### Testing and Validation
+
+#### Unit Test Example
+
+```python
+import pytest
+from pathlib import Path
+
+def test_parse_and_chunk():
+    """Test document parsing."""
+    result = parse_and_chunk(
+        file_path=Path("tests/fixtures/sample.docx"),
+        file_type="docx",
+        max_chunk_chars=2000
+    )
+    
+    assert result.total_chunks > 0
+    assert len(result.chunks) == result.total_chunks
+    assert all(chunk.chunk_id for chunk in result.chunks)
+    assert all(chunk.chunk_type in ["prose", "heading", "list", "table"] 
+               for chunk in result.chunks)
+
+def test_schema_discovery():
+    """Test schema discovery."""
+    chunks = [...]  # Load test chunks
+    llm = _build_llm("anthropic", "claude-3-haiku")  # Use cheap model for tests
+    
+    schema = schema_discovery_agent(chunks, llm)
+    
+    assert 0.0 <= schema.confidence_avg <= 1.0
+    assert len(schema.entities) > 0
+    assert schema.structural_pattern in [
+        "vertical_table", "horizontal_table", "prose_with_tables", 
+        "spreadsheet", "mixed"
+    ]
+
+def test_confidence_gate():
+    """Test confidence gate logic."""
+    # High confidence schema
+    schema_high = SchemaMap(
+        structural_pattern="vertical_table",
+        entities=[...],
+        confidence_avg=0.90
+    )
+    decision = check_confidence(schema_high)
+    assert decision.decision == "auto_accept"
+    
+    # Low confidence schema
+    schema_low = SchemaMap(
+        structural_pattern="mixed",
+        entities=[],
+        confidence_avg=0.30
+    )
+    decision = check_confidence(schema_low)
+    assert decision.decision == "reject"
+```
+
+#### Integration Test Example
+
+```python
+def test_end_to_end_extraction():
+    """Test complete extraction pipeline."""
+    # Setup
+    file_path = Path("tests/fixtures/test_document.docx")
+    llm = _build_llm("anthropic", "claude-3-haiku")
+    
+    # Preprocess
+    result = parse_and_chunk(file_path, "docx")
+    assert result.total_chunks > 0
+    
+    # Discover schema
+    schema = schema_discovery_agent(result.chunks, llm)
+    assert schema.confidence_avg > 0.5
+    
+    # Extract requirements
+    atomizer = RequirementAtomizerNode(llm, prompt_registry)
+    requirements = atomizer.atomize(result.chunks, schema)
+    assert len(requirements) > 0
+    
+    # Evaluate quality
+    eval_report = eval_quality(requirements, result.chunks, schema)
+    assert eval_report.quality_score > 0.5
+    
+    # Validate output format
+    for req in requirements:
+        assert req.requirement_id
+        assert req.rule_type
+        assert req.description
+        assert 0.0 <= req.confidence <= 1.0
+```
+
+### LLM Provider Selection
+
+#### Choosing the Right Model
+
+**Anthropic Claude (Recommended for Quality)**:
+- ✅ Best accuracy for regulatory text
+- ✅ Better at following complex instructions
+- ✅ Excellent for schema discovery
+- ✅ Handles long documents well
+- ❌ Slightly slower
+- ❌ Higher cost per token
+
+**OpenAI GPT-4 (Recommended for Speed/Cost)**:
+- ✅ Faster response times
+- ✅ Lower cost per token
+- ✅ Good for simple extractions
+- ✅ Wide model selection (gpt-4, gpt-4o-mini)
+- ❌ May miss subtle requirements
+- ❌ Less consistent with complex schemas
+
+**Recommendations by Use Case**:
+- **Development/Testing**: Use GPT-4o-mini for speed and cost
+- **Production**: Use Claude Opus for maximum accuracy
+- **Schema Discovery**: Always use Claude (significantly better)
+- **Simple Documents**: GPT-4 is sufficient
+- **Complex/Critical Documents**: Use Claude Opus
+
+### Document Structure Optimization
+
+**For Best Results**:
+
+1. **Use Clear Headings**: Documents with clear heading hierarchy parse better
+   ```
+   ✅ Good:
+   Heading 1: Data Requirements
+     Heading 2: Quality Standards
+       Heading 3: Accuracy Threshold
+   
+   ❌ Poor:
+   All text with bold formatting, no heading styles
+   ```
+
+2. **Structure Tables Properly**: Use actual table elements, not formatted text
+   ```
+   ✅ Good: Word table with proper rows/columns
+   ❌ Poor: Text formatted to look like a table using spaces/tabs
+   ```
+
+3. **Be Explicit**: Regulatory language should be clear and unambiguous
+   ```
+   ✅ Good: "Institutions must maintain 95% accuracy"
+   ❌ Poor: "Institutions should aim for high accuracy"
+   ```
+
+4. **Include Context**: Provide section numbers and references
+   ```
+   ✅ Good: "Section 2.3: Customer name accuracy must be ≥95%"
+   ❌ Poor: "Accuracy must be high"
+   ```
+
+### Tuning Extraction Parameters
+
+**Adjust Chunk Sizes**:
+```bash
+# Smaller chunks (better for dense documents with short requirements)
+python -m src.cli preprocess --max-chunk-size 2000 --min-chunk-size 100
+
+# Larger chunks (better for narrative documents with long requirements)
+python -m src.cli preprocess --max-chunk-size 5000 --min-chunk-size 200
+```
+
+**Use Appropriate Modes**:
+- Use `--mode rules` for requirement documents
+- Use `--mode grc_components` for GRC libraries
+- Use `atomize` command for production-quality extraction with full evaluation
+
+**Enable Debug Mode for Troubleshooting**:
+```bash
+# See intermediate outputs and what the LLM actually returns
+python -m src.cli --debug atomize --provider anthropic --input document.docx
+```
+
 ## Understanding the Workflow
 
 This section explains how Kratos-discover processes documents from start to finish, helping you understand when to use each component.
@@ -1697,8 +3954,6 @@ python -m src.cli \
 # - validated_rules.json (post-validation)
 # - deduped_rules.json (after deduplication)
 ```
-
-## Agent1 Deterministic Preprocessor
 
 ## Agent1 Deterministic Preprocessor
 
@@ -2162,280 +4417,423 @@ Multi-stage validation ensures data quality:
 4. Deduplication based on content similarity
 5. Source text verification
 
-## Best Practices and Tips
-
-This section provides practical guidance for getting the best results from Kratos-discover.
-
-### Choosing the Right LLM Provider
-
-**Anthropic Claude (Recommended for Quality)**:
-- ✅ Best accuracy for regulatory text
-- ✅ Better at following complex instructions
-- ✅ Excellent for schema discovery
-- ✅ Handles long documents well
-- ❌ Slightly slower
-- ❌ Higher cost per token
-
-**OpenAI GPT-4 (Recommended for Speed/Cost)**:
-- ✅ Faster response times
-- ✅ Lower cost per token
-- ✅ Good for simple extractions
-- ✅ Wide model selection (gpt-4, gpt-4o-mini)
-- ❌ May miss subtle requirements
-- ❌ Less consistent with complex schemas
-
-**Recommendation**:
-- **Development/Testing**: Use GPT-4o-mini for speed and cost
-- **Production**: Use Claude Opus for maximum accuracy
-- **Schema Discovery**: Always use Claude (significantly better)
-- **Simple Documents**: GPT-4 is sufficient
-- **Complex/Critical Documents**: Use Claude
-
-### Optimizing Document Structure
-
-**For Best Results**:
-
-1. **Use Clear Headings**: Documents with clear heading hierarchy parse better
-   ```
-   ✅ Good:
-   Heading 1: Data Requirements
-     Heading 2: Quality Standards
-       Heading 3: Accuracy Threshold
-   
-   ❌ Poor:
-   All text with bold formatting, no heading styles
-   ```
-
-2. **Structure Tables Properly**: Use actual table elements, not formatted text
-   ```
-   ✅ Good: Word table with proper rows/columns
-   ❌ Poor: Text formatted to look like a table using spaces/tabs
-   ```
-
-3. **Be Explicit**: Regulatory language should be clear and unambiguous
-   ```
-   ✅ Good: "Institutions must maintain 95% accuracy"
-   ❌ Poor: "Institutions should aim for high accuracy"
-   ```
-
-4. **Include Context**: Provide section numbers and references
-   ```
-   ✅ Good: "Section 2.3: Customer name accuracy must be ≥95%"
-   ❌ Poor: "Accuracy must be high"
-   ```
-
-### Tuning Extraction Quality
-
-**Adjust Chunk Sizes**:
-```bash
-# Smaller chunks (better for dense documents)
-python -m src.cli preprocess --max-chunk-size 2000 --min-chunk-size 100
-
-# Larger chunks (better for narrative documents)
-python -m src.cli preprocess --max-chunk-size 5000 --min-chunk-size 200
-```
-
-**Use Appropriate Modes**:
-- Use `--mode rules` for requirement documents
-- Use `--mode grc_components` for GRC libraries
-- Use `atomize` command for production extraction
-
-**Enable Debug Mode**:
-```bash
-# See what the LLM actually returns
-python -m src.cli --debug --dump-debug --provider openai
-```
-
-### Managing Costs
-
-**Cost Optimization Strategies**:
-
-1. **Start with Preprocessing** (No LLM cost):
-   ```bash
-   python -m src.cli preprocess --input doc.docx --output chunks.json
-   # Review chunks.json to ensure document parsed correctly
-   ```
-
-2. **Test with Small Documents First**:
-   ```bash
-   # Extract just the first few pages for testing
-   # Use Word to create a test document with first 5 pages
-   ```
-
-3. **Use Cheaper Models for Testing**:
-   ```bash
-   # Development
-   python -m src.cli --provider openai --model gpt-4o-mini
-   
-   # Production
-   python -m src.cli --provider anthropic --model claude-opus-4-20250805
-   ```
-
-4. **Cache Schema Discovery**:
-   - Schema discovery results are cached by document hash
-   - Re-running on same document reuses cached schema (saves LLM calls)
-
-5. **Batch Processing**:
-   ```bash
-   # Process multiple documents in one session
-   for doc in data/*.docx; do
-     python -m src.cli --provider openai --input "$doc" --output "results/$(basename $doc .docx).json"
-   done
-   ```
-
-### Handling Large Documents
-
-**For Documents Over 100 Pages**:
-
-1. **Increase Chunk Sizes**:
-   ```bash
-   python -m src.cli preprocess --max-chunk-size 5000
-   ```
-
-2. **Use Streaming** (if available):
-   - Set `temperature=0` for reproducibility
-   - Use `max_tokens=4000` or higher
-
-3. **Split Documents**:
-   - Process major sections separately
-   - Merge results afterward
-
-4. **Monitor Progress**:
-   ```bash
-   # Enable verbose logging
-   python -m src.cli --log-level INFO --provider anthropic
-   ```
-
-### Improving Accuracy
-
-**Strategies for Better Extraction**:
-
-1. **Use Prompt Versioning**:
-   ```bash
-   # Test different prompt versions
-   python -m src.cli --prompt-version v1.2
-   python -m src.cli --prompt-version v1.1
-   # Compare results
-   ```
-
-2. **Enable Grounding Verification**:
-   - RuleAgent automatically grounds rules against source text
-   - Agent1 atomizer includes multi-factor confidence scoring
-   - Review `grounded_in` field in output
-
-3. **Review Debug Outputs**:
-   ```bash
-   python -m src.cli --debug --dump-debug
-   # Check debug_*/raw_rules.json for LLM hallucinations
-   ```
-
-4. **Use Quality Evaluation**:
-   ```bash
-   python -m src.cli atomize  # Includes quality checks
-   # Review evaluation.json for quality metrics
-   ```
-
-5. **Set Confidence Thresholds**:
-   ```python
-   # In code, filter by confidence
-   rules = [r for r in rules if r.confidence >= 0.80]
-   ```
-
-### Common Pitfalls
-
-**❌ Don't**:
-- Use low-quality scanned PDFs (convert to DOCX first)
-- Process documents with complex layouts without preprocessing first
-- Ignore validation errors (they indicate real issues)
-- Use tiny chunk sizes (<50 chars) or huge chunk sizes (>10,000 chars)
-- Skip schema discovery for unfamiliar document formats
-- Ignore quality evaluation results in production
-
-**✅ Do**:
-- Use native DOCX format when possible
-- Preprocess documents first to verify structure
-- Review validation errors and fix source documents
-- Use appropriate chunk sizes for your document type (2000-5000 chars)
-- Run schema discovery on new document types
-- Review quality evaluation and address critical issues
-
-### Production Deployment Checklist
-
-Before deploying to production:
-
-- [ ] Test with representative sample documents
-- [ ] Run full atomization pipeline with quality checks
-- [ ] Review confidence thresholds (adjust if needed)
-- [ ] Set up monitoring/logging
-- [ ] Configure appropriate LLM model (Claude for production)
-- [ ] Set up error handling and retry logic
-- [ ] Cache schema discovery results
-- [ ] Document expected input formats
-- [ ] Create validation tests for output
-- [ ] Set up alerts for quality score drops
-
-### Debugging Common Issues
-
-**Issue: "No rules extracted"**
-```bash
-# Check preprocessing
-python -m src.cli preprocess --input doc.docx --output chunks.json
-# Review chunks.json - are there meaningful chunks?
-
-# Check with debug mode
-python -m src.cli --debug --dump-debug --provider openai
-# Review debug_*/raw_rules.json - what did LLM return?
-```
-
-**Issue: "Low confidence scores"**
-```bash
-# Try different LLM provider
-python -m src.cli --provider anthropic  # Usually more accurate
-
-# Check schema discovery
-python -m src.cli discover-schema --input doc.docx --provider anthropic
-# Low schema confidence indicates document structure issues
-```
-
-**Issue: "Too many duplicate rules"**
-- Document may have repetitive content
-- Deduplication threshold may be too low
-- Review `deduped_rules.json` in debug mode
-
-**Issue: "Rules not grounded in source"**
-- LLM is hallucinating
-- Switch to Claude (better grounding)
-- Try different prompt version
-- Check source document for ambiguity
-
 ## Troubleshooting
 
-### Common Issues
+### Common Issues and Solutions
 
-**Import Errors**: Ensure virtual environment is activated and dependencies are installed
+#### Import Errors
+
+**Problem**: `ModuleNotFoundError: No module named 'src'` or similar import errors
+
+**Solutions**:
 ```bash
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+# 1. Ensure virtual environment is activated
+source .venv/bin/activate  # Linux/Mac
+.venv\Scripts\activate     # Windows
+
+# 2. Reinstall dependencies
 pip install -r requirements.txt
+
+# 3. Install in editable mode
+pip install -e .
+
+# 4. Verify Python version (requires 3.10+)
+python --version
+
+# 5. Check PYTHONPATH
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 ```
 
-**API Key Errors**: Verify environment variables are set correctly
+#### API Key Errors
+
+**Problem**: `AuthenticationError: Invalid API key` or `API key not found`
+
+**Solutions**:
 ```bash
-echo $OPENAI_API_KEY  # or echo %OPENAI_API_KEY% on Windows
+# 1. Verify environment variables are set
+echo $OPENAI_API_KEY
+echo $ANTHROPIC_API_KEY
+
+# On Windows
+echo %OPENAI_API_KEY%
+echo %ANTHROPIC_API_KEY%
+
+# 2. Check .env file exists and is loaded
+cat .env
+
+# 3. Verify keys are valid (not expired, have correct permissions)
+# Test OpenAI key:
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $OPENAI_API_KEY"
+
+# Test Anthropic key:
+curl https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01"
+
+# 4. Reload environment variables
+source .env  # or restart terminal
 ```
 
-**File Not Found**: Check that input document path is correct and file exists
+#### File Not Found Errors
+
+**Problem**: `FileNotFoundError: [Errno 2] No such file or directory`
+
+**Solutions**:
 ```bash
-ls -la data/FDIC_370_GRC_Library_National_Bank.docx
+# 1. Check file exists
+ls -la data/document.docx
+
+# 2. Use absolute paths
+python -m src.cli atomize --input /full/path/to/document.docx
+
+# 3. Check current directory
+pwd  # Should be in kratos-discover root
+
+# 4. Verify file permissions
+chmod +r data/document.docx
 ```
 
-**Model Timeout**: For large documents, consider using debug mode to process incrementally
+#### LLM Timeout Errors
 
-### Logging
+**Problem**: `TimeoutError: Request timed out` or `ReadTimeout`
 
-Increase log verbosity for troubleshooting:
+**Solutions**:
 ```bash
-python -m src.cli --log-level DEBUG
+# 1. Increase timeout in environment variables
+export OPENAI_TIMEOUT=180
+export ANTHROPIC_TIMEOUT=180
+
+# 2. Process smaller chunks
+python -m src.cli atomize \
+  --input document.docx \
+  --max-chunk-size 2000
+
+# 3. Use faster model
+python -m src.cli atomize \
+  --input document.docx \
+  --provider anthropic \
+  --model claude-3-haiku-20240307
+
+# 4. Enable debug mode to see where it hangs
+python -m src.cli atomize --input document.docx --debug
 ```
+
+#### Rate Limiting Errors
+
+**Problem**: `RateLimitError: Rate limit exceeded` or `429 Too Many Requests`
+
+**Solutions**:
+```python
+# 1. Add retry logic with exponential backoff
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=4, max=60)
+)
+def call_llm_with_retry(llm, prompt):
+    return llm.invoke(prompt)
+
+# 2. Reduce batch size
+export ATOMIZER_BATCH_SIZE=5  # Default is 10
+
+# 3. Add delays between batches
+import time
+for batch in batches:
+    process_batch(batch)
+    time.sleep(2)  # 2 second delay
+
+# 4. Use different API key or upgrade plan
+```
+
+#### Memory Errors
+
+**Problem**: `MemoryError` or system becomes unresponsive
+
+**Solutions**:
+```bash
+# 1. Process in smaller chunks
+python -m src.cli atomize \
+  --input large_document.docx \
+  --max-chunk-size 1500
+
+# 2. Disable caching if memory constrained
+export ENABLE_CACHING=false
+
+# 3. Process documents individually instead of batch
+for file in data/*.docx; do
+    python -m src.cli atomize --input "$file"
+done
+
+# 4. Increase system memory or use swap
+# Monitor memory usage:
+watch -n 1 free -h
+```
+
+#### JSON Parsing Errors
+
+**Problem**: `JSONDecodeError: Expecting value` or malformed JSON
+
+**Solutions**:
+```python
+# 1. Enable schema repair
+# This is enabled by default in atomizer
+
+# 2. Check LLM response in debug mode
+python -m src.cli atomize --input document.docx --debug
+# Then inspect outputs/*_raw_extraction.json
+
+# 3. Try different model (Claude often produces better JSON)
+python -m src.cli atomize --input document.docx --provider anthropic
+
+# 4. Validate JSON manually
+import json
+with open("outputs/raw_extraction.json") as f:
+    try:
+        data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"JSON error at line {e.lineno}, column {e.colno}")
+        print(f"Error: {e.msg}")
+```
+
+#### Low Quality Extractions
+
+**Problem**: Low confidence scores, many failures in quality report
+
+**Diagnostics**:
+```python
+# Check quality report
+cat outputs/*_eval.json | grep -A5 "quality_score"
+
+# Identify failure patterns
+cat outputs/*_eval.json | jq '.failures_by_check'
+```
+
+**Solutions by Failure Type**:
+
+1. **High Grounding Failures**:
+   ```bash
+   # Document may have poor formatting or OCR issues
+   # Solutions:
+   # - Clean document formatting
+   # - Use smaller chunk sizes to preserve context
+   python -m src.cli atomize --input doc.docx --max-chunk-size 2000
+   ```
+
+2. **High Testability Failures**:
+   ```bash
+   # Document has vague language ("should", "may", "could")
+   # Solutions:
+   # - This is often correct - document IS vague
+   # - Flag for human review
+   # - Use verb replacement utility
+   python -c "
+   from agent1.scoring.verb_replacer import VerbReplacer
+   replacer = VerbReplacer()
+   text = 'Banks should maintain records'
+   fixed = replacer.strengthen(text)
+   print(fixed)  # 'Banks must maintain records'
+   "
+   ```
+
+3. **High Hallucination Failures**:
+   ```bash
+   # LLM is fabricating content
+   # Solutions:
+   # - Switch to Claude (better grounding)
+   python -m src.cli atomize --input doc.docx --provider anthropic --model claude-3-opus
+   
+   # - Use stricter prompts
+   # - Lower temperature (already 0.0 by default)
+   ```
+
+4. **High Deduplication Failures**:
+   ```bash
+   # Document has repetitive content (often normal)
+   # Solutions:
+   # - This is usually correct - document IS repetitive
+   # - Adjust deduplication threshold if too aggressive
+   export EVAL_DEDUP_THRESHOLD=0.90  # Default is 0.85
+   ```
+
+5. **Low Coverage**:
+   ```bash
+   # Not extracting from all chunks
+   # Solutions:
+   # - Document may have non-regulatory content (normal)
+   # - Check if chunks are appropriate size
+   python -m src.cli preprocess --input doc.docx
+   # Review chunk types and content
+   ```
+
+#### Schema Discovery Failures
+
+**Problem**: Schema confidence too low, gate rejects
+
+**Solutions**:
+```bash
+# 1. Check schema output
+python -m src.cli discover-schema --input document.docx --provider anthropic
+# Review entity structure
+
+# 2. Use Claude Opus for better schema discovery
+python -m src.cli atomize \
+  --input document.docx \
+  --provider anthropic \
+  --model claude-3-opus-20240229
+
+# 3. Lower gate threshold (if acceptable)
+# Edit agent1/config/gate_config.yaml:
+thresholds:
+  auto_accept: 0.75  # Was 0.85
+  human_review: 0.40  # Was 0.50
+
+# 4. Check document structure
+# - Does it have clear tables or structure?
+# - Is text clear and well-formatted?
+# - Try restructuring document for clarity
+```
+
+#### Performance Issues
+
+**Problem**: Extraction is very slow
+
+**Diagnostics**:
+```bash
+# Time the extraction
+time python -m src.cli atomize --input document.docx
+```
+
+**Solutions**:
+```bash
+# 1. Use faster model
+python -m src.cli atomize --input doc.docx \
+  --provider anthropic --model claude-3-haiku-20240307
+
+# 2. Enable caching for repeated structures
+export ENABLE_CACHING=true
+
+# 3. Process in parallel (for multiple documents)
+# See "Parallel Processing" section in Performance Optimization
+
+# 4. Profile the code
+python -m cProfile -o profile.stats -m src.cli atomize --input doc.docx
+python -c "
+import pstats
+p = pstats.Stats('profile.stats')
+p.sort_stats('cumulative').print_stats(20)
+"
+
+# 5. Check network latency
+ping api.openai.com
+ping api.anthropic.com
+```
+
+#### Debugging Techniques
+
+##### Enable Verbose Logging
+
+```bash
+# Set log level to DEBUG
+export LOG_LEVEL=DEBUG
+python -m src.cli atomize --input document.docx
+
+# Or use CLI flag
+python -m src.cli --log-level DEBUG atomize --input document.docx
+
+# View structured logs
+tail -f logs/kratos.log | jq '.'
+```
+
+##### Inspect Intermediate Artifacts
+
+```bash
+# Enable debug mode
+python -m src.cli atomize --input document.docx --debug
+
+# Check generated artifacts:
+ls outputs/*_debug_*
+
+# View preprocessing output
+cat outputs/document_debug_chunks.json | jq '.[0:3]'
+
+# View schema discovery output
+cat outputs/document_debug_schema.json | jq '.entities'
+
+# View raw LLM responses
+cat outputs/document_debug_raw_extraction.json | jq '.'
+```
+
+##### Test Components Individually
+
+```python
+# Test preprocessing only
+python -m src.cli preprocess --input document.docx --output test_chunks.json
+
+# Test schema discovery only
+python -m src.cli discover-schema --input document.docx
+
+# Test extraction on specific chunk
+from agent1.nodes.preprocessor import parse_and_chunk
+result = parse_and_chunk(Path("document.docx"), "docx")
+print(result.chunks[0])  # Inspect first chunk
+```
+
+##### Check LLM Responses
+
+```python
+# Make direct LLM call to test
+from src.cli import _build_llm
+
+llm = _build_llm("anthropic", "claude-3-sonnet-20240229")
+
+response = llm.invoke("Extract one regulatory rule from this text: 'Banks must maintain customer records with 95% accuracy.'")
+print(response.content)
+```
+
+### Error Messages Reference
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `ModuleNotFoundError: No module named 'src'` | Python can't find src package | `pip install -e .` |
+| `AuthenticationError: Invalid API key` | API key missing/invalid | Set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` |
+| `FileNotFoundError: document.docx` | File doesn't exist | Check path, use absolute path |
+| `TimeoutError: Request timed out` | LLM request too slow | Increase timeout, use faster model |
+| `RateLimitError: Rate limit exceeded` | Too many API requests | Add delays, reduce batch size |
+| `JSONDecodeError: Expecting value` | Invalid JSON from LLM | Enable repair, try different model |
+| `ValidationError: confidence must be between 0.5 and 0.99` | Invalid confidence value | Check scoring logic |
+| `MemoryError: Unable to allocate` | Out of memory | Smaller chunks, process individually |
+| `SchemaRejectedException: Schema confidence too low` | Poor schema quality | Better document structure, lower threshold |
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check Logs**: Review debug logs for detailed error information
+2. **Search Issues**: Check [GitHub Issues](https://github.com/sumitasthana/kratos-discover/issues)
+3. **Enable Debug Mode**: Run with `--debug` flag to see intermediate outputs
+4. **Minimal Reproduction**: Create smallest example that reproduces the issue
+5. **Report Bug**: Open issue with:
+   - Full error message and stack trace
+   - Steps to reproduce
+   - Python version, OS, package versions
+   - Sample document (if possible, non-sensitive)
+   - Debug artifacts (if applicable)
+
+### Performance Benchmarks
+
+Typical performance on a standard document (50 pages, 150 chunks):
+
+| Pipeline | Model | Time | Cost | Quality Score |
+|----------|-------|------|------|---------------|
+| Agent1 | Claude Opus | ~8 min | ~$2.50 | 0.85-0.92 |
+| Agent1 | Claude Sonnet | ~5 min | ~$0.60 | 0.80-0.88 |
+| Agent1 | Claude Haiku | ~3 min | ~$0.10 | 0.75-0.83 |
+| Agent1 | GPT-4o-mini | ~4 min | ~$0.08 | 0.73-0.81 |
+| RuleAgent | Claude Sonnet | ~3 min | ~$0.40 | 0.78-0.85 |
+
+*Note: Performance varies based on document complexity and server load*
 
 ## Docker Deployment
 
