@@ -5,7 +5,6 @@ import logging
 import re
 from datetime import datetime
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
 
@@ -16,24 +15,10 @@ from langgraph.graph import END, StateGraph
 
 from prompt_registry import PromptRegistry
 
+# Import canonical enums from shared module
+from shared.models import RuleType, RuleCategory
+
 logger = logging.getLogger(__name__)
-
-
-class RuleCategory(str, Enum):
-    RULE = "rule"
-    CONTROL = "control"
-    RISK = "risk"
-
-
-class RuleType(str, Enum):
-    DATA_QUALITY_THRESHOLD = "data_quality_threshold"
-    OWNERSHIP_CATEGORY = "ownership_category"
-    BENEFICIAL_OWNERSHIP_THRESHOLD = "beneficial_ownership_threshold"
-    DOCUMENTATION_REQUIREMENT = "documentation_requirement"
-    UPDATE_REQUIREMENT = "update_requirement"
-    UPDATE_TIMELINE = "update_timeline"
-    CONTROL_REQUIREMENT = "control_requirement"
-    RISK_STATEMENT = "risk_statement"
 
 
 class RuleMetadata(BaseModel):

@@ -69,6 +69,82 @@ def _compute_requirements_by_type(requirements: list) -> dict[str, int]:
     return by_type
 
 
+def _validate_enrichments(requirements: list) -> list[dict]:
+    """CF-14: Self-validation pass for Eval enrichments.
+    
+    Validates that enrichments added by Eval/Atomizer are internally consistent:
+    - Confidence score integrity (score matches features sum within tolerance)
+    - Template error detection (doubled words, empty placeholders)
+    - Enrichment grounding checks (system mappings have keywords if inferred)
+    """
+    issues: list[dict] = []
+    
+    for req in requirements:
+        attrs = req.attributes if hasattr(req, "attributes") else {}
+        req_id = req.requirement_id if hasattr(req, "requirement_id") else "unknown"
+        
+        # 1. Confidence score integrity check
+        features = attrs.get("_confidence_features", {})
+        if features:
+            raw_total = features.get("raw_total", 0)
+            declared_conf = req.confidence if hasattr(req, "confidence") else 0
+            # Allow for floor/ceiling transform (0.50-0.99 range)
+            expected_clamped = min(0.99, max(0.50, raw_total))
+            if abs(declared_conf - expected_clamped) > 0.05:
+                issues.append({
+                    "req_id": req_id,
+                    "issue_type": "confidence_integrity",
+                    "detail": f"Declared {declared_conf:.2f} vs expected {expected_clamped:.2f} (raw={raw_total:.3f})",
+                })
+        
+        # 2. Template error detection (doubled words)
+        import re
+        doubled_pattern = re.compile(r'\b(\w+)\s+\1\b', re.IGNORECASE)
+        
+        # Check control_objective
+        control_obj = attrs.get("control_metadata", {}).get("control_objective", "")
+        if control_obj and doubled_pattern.search(control_obj):
+            issues.append({
+                "req_id": req_id,
+                "issue_type": "template_error",
+                "detail": f"Doubled word in control_objective: {doubled_pattern.search(control_obj).group()}",
+            })
+        
+        # Check test_procedure
+        test_proc = attrs.get("control_metadata", {}).get("test_procedure", "")
+        if test_proc and "{" in test_proc and "}" in test_proc:
+            # Unfilled placeholder
+            issues.append({
+                "req_id": req_id,
+                "issue_type": "template_error",
+                "detail": "Unfilled placeholder in test_procedure",
+            })
+        
+        # 3. Enrichment grounding check
+        ctrl_meta = attrs.get("control_metadata", {})
+        sys_source = ctrl_meta.get("system_mapping_source", "")
+        sys_keywords = ctrl_meta.get("system_mapping_keywords", [])
+        
+        if sys_source == "keyword_inferred" and not sys_keywords:
+            issues.append({
+                "req_id": req_id,
+                "issue_type": "enrichment_grounding",
+                "detail": "system_mapping_source=keyword_inferred but no keywords recorded",
+            })
+        
+        # Check evidence_type_source
+        ev_source = ctrl_meta.get("evidence_type_source", "")
+        if ev_source == "extracted":
+            # Should have grounding evidence - but we don't extract yet, so flag
+            issues.append({
+                "req_id": req_id,
+                "issue_type": "enrichment_grounding",
+                "detail": "evidence_type_source=extracted but extraction not implemented",
+            })
+    
+    return issues
+
+
 def _compute_schema_coverage(requirements: list, schema_map: Any) -> dict[str, int]:
     """Compute how many requirements reference each schema entity."""
     coverage: dict[str, int] = {}
@@ -77,15 +153,17 @@ def _compute_schema_coverage(requirements: list, schema_map: Any) -> dict[str, i
         return coverage
     
     for entity in schema_map.entities:
-        entity_name = entity.name.lower()
+        # DiscoveredEntity uses discovered_label, not name
+        entity_name = getattr(entity, "discovered_label", getattr(entity, "name", "unknown"))
+        entity_name_lower = entity_name.lower()
         count = 0
         for req in requirements:
             # Check if entity name appears in attributes or description
             attrs_str = str(req.attributes).lower()
             desc_str = (req.rule_description or "").lower()
-            if entity_name in attrs_str or entity_name in desc_str:
+            if entity_name_lower in attrs_str or entity_name_lower in desc_str:
                 count += 1
-        coverage[entity.name] = count
+        coverage[entity_name] = count
     
     return coverage
 
@@ -118,6 +196,22 @@ def eval_quality(state: Phase1State) -> dict:
         chunks, requirements
     )
     
+    # CF-2: Reconcile with extraction_metadata if available
+    # Use extraction_metadata as source of truth for skipped chunks
+    if extraction_metadata:
+        meta_zero = getattr(extraction_metadata, "chunks_with_zero_extractions", [])
+        if hasattr(extraction_metadata, "chunks_with_zero_extractions"):
+            meta_zero = extraction_metadata.chunks_with_zero_extractions
+        elif isinstance(extraction_metadata, dict):
+            meta_zero = extraction_metadata.get("chunks_with_zero_extractions", [])
+        
+        # Merge: use extraction_metadata's list if it has more entries
+        if len(meta_zero) > len(chunks_with_zero):
+            chunks_with_zero = list(meta_zero)
+            # Recalculate coverage ratio
+            if total_chunks > 0:
+                coverage_ratio = 1.0 - (len(chunks_with_zero) / total_chunks)
+    
     # 2. Testability check
     testability_issues: list[TestabilityIssue] = []
     for req in requirements:
@@ -149,7 +243,16 @@ def eval_quality(state: Phase1State) -> dict:
     # 6. Deduplication analysis
     dedup_ratio, potential_duplicates = check_deduplication(requirements)
     
-    # 7. Compute metrics
+    # 7. CF-14: Self-validation of enrichments
+    enrichment_validation_issues = _validate_enrichments(requirements)
+    if enrichment_validation_issues:
+        logger.warning(
+            "eval_enrichment_validation_issues",
+            count=len(enrichment_validation_issues),
+            issues=enrichment_validation_issues[:5],  # Log first 5
+        )
+    
+    # 8. Compute metrics
     avg_confidence = 0.0
     if requirements:
         avg_confidence = sum(r.confidence for r in requirements) / len(requirements)
@@ -206,6 +309,7 @@ def eval_quality(state: Phase1State) -> dict:
         grounding_issues=grounding_issues,
         hallucination_flags=hallucination_flags,
         schema_compliance_issues=schema_compliance_issues,
+        enrichment_validation_issues=enrichment_validation_issues,  # CF-14
         unique_requirement_count=len(requirements) - len(potential_duplicates),
         potential_duplicates=potential_duplicates,
         dedup_ratio=dedup_ratio,

@@ -4,7 +4,10 @@ import hashlib
 import os
 import re
 from collections import defaultdict
+from pathlib import Path
+
 import structlog
+import yaml
 from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel
 
@@ -14,6 +17,8 @@ from agent1.models.state import Phase1State
 from agent1.cache.schema_cache import get_cached_schema, cache_schema
 
 logger = structlog.get_logger(__name__)
+
+SCHEMA_DISCOVERY_PROMPTS_DIR = Path(__file__).parent.parent / "prompts" / "schema_discovery"
 
 MAX_CHUNKS_PER_ENTITY_TYPE = 3
 MAX_TOTAL_CHUNKS = 15
@@ -173,10 +178,23 @@ def extract_field_labels_from_chunks(chunks: list[ContentChunk]) -> dict[str, li
     return dict(fields_by_entity)
 
 
+def _load_schema_discovery_prompt(version: str = "v1.0") -> dict | None:
+    """Load schema discovery prompt from YAML file."""
+    prompt_file = SCHEMA_DISCOVERY_PROMPTS_DIR / f"{version}.yaml"
+    if not prompt_file.exists():
+        logger.warning("schema_discovery_prompt_not_found", path=str(prompt_file))
+        return None
+    
+    try:
+        with open(prompt_file, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        logger.error("schema_discovery_prompt_parse_error", error=str(e))
+        return None
+
+
 def build_discovery_prompt(chunks: list[ContentChunk], entity_stats: dict, extracted_fields: dict) -> str:
     """Build the prompt from chunks with grounded entity stats and field labels."""
-    import json
-    
     # Build chunk text with annotations
     chunks_text_parts = []
     for chunk in chunks:
@@ -209,6 +227,56 @@ def build_discovery_prompt(chunks: list[ContentChunk], entity_stats: dict, extra
         fields_lines.append(f"- {entity_type.upper()} fields: {field_labels}")
     extracted_fields_text = "\n".join(fields_lines) if fields_lines else "No fields extracted from tables"
     
+    # Build JSON example with dynamic values
+    control_record_count = entity_stats.get('control', {}).get('unique_records', 0)
+    json_example = f'''{{
+  "document_format": "docx",
+  "structural_pattern": "vertical_key_value_tables",
+  "structural_confidence": 0.85,
+  "inferred_document_category": "grc_library",
+  "entities": [
+    {{
+      "discovered_label": "Control",
+      "identifier_field": "control_id",
+      "record_count": {control_record_count},
+      "fields": [
+        {{
+          "raw_label": "Control ID",
+          "canonical_field": "control_id",
+          "inferred_type": "identifier",
+          "confidence": 0.95,
+          "mapping_rationale": "Field labeled 'Control ID' contains unique identifiers like C-001",
+          "example_values": ["C-001", "C-002"]
+        }}
+      ]
+    }}
+  ],
+  "relationships": [],
+  "unmapped_fields": [],
+  "anomalies": ["Specific anomaly: Record C-005 missing field X"],
+  "total_records_estimated": {total_records},
+  "schema_version": "",
+  "avg_confidence": 0.85
+}}'''
+    
+    # Try to load from YAML
+    prompt_config = _load_schema_discovery_prompt("v1.0")
+    if prompt_config:
+        role = prompt_config.get("role", "")
+        instructions = prompt_config.get("instructions", "")
+        
+        # Format the instructions with dynamic values
+        formatted_instructions = instructions.format(
+            entity_stats_text=entity_stats_text,
+            extracted_fields_text=extracted_fields_text,
+            chunks_text=chunks_text,
+            json_example=json_example,
+        )
+        
+        return f"{role}\n{formatted_instructions}"
+    
+    # Fallback to inline prompt if YAML not found
+    logger.warning("schema_discovery_using_fallback_prompt")
     return f"""You are a schema discovery expert analyzing a GRC (Governance, Risk, Compliance) document.
 
 ## GROUND TRUTH FROM PARSER (use these exact counts and field labels):
@@ -236,35 +304,7 @@ Create a schema map for this document. You MUST:
 
 Return ONLY valid JSON (no markdown, no explanation):
 
-{{
-  "document_format": "docx",
-  "structural_pattern": "vertical_key_value_tables",
-  "structural_confidence": 0.85,
-  "inferred_document_category": "grc_library",
-  "entities": [
-    {{
-      "discovered_label": "Control",
-      "identifier_field": "control_id",
-      "record_count": {entity_stats.get('control', {}).get('unique_records', 0)},
-      "fields": [
-        {{
-          "raw_label": "Control ID",
-          "canonical_field": "control_id",
-          "inferred_type": "identifier",
-          "confidence": 0.95,
-          "mapping_rationale": "Field labeled 'Control ID' contains unique identifiers like C-001",
-          "example_values": ["C-001", "C-002"]
-        }}
-      ]
-    }}
-  ],
-  "relationships": [],
-  "unmapped_fields": [],
-  "anomalies": ["Specific anomaly: Record C-005 missing field X"],
-  "total_records_estimated": {total_records},
-  "schema_version": "",
-  "avg_confidence": 0.85
-}}
+{json_example}
 
 CONSTRAINTS:
 - inferred_type: identifier, text, date, enum, composite_enum, reference_list, number, boolean, person_or_role, list, unknown

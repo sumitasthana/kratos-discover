@@ -68,6 +68,7 @@ class EvalReport(BaseModel):
     grounding_issues: list[GroundingIssue] = Field(default_factory=list)
     hallucination_flags: list[HallucinationFlag] = Field(default_factory=list)
     schema_compliance_issues: list[SchemaComplianceIssue] = Field(default_factory=list)
+    enrichment_validation_issues: list[dict] = Field(default_factory=list)  # CF-14: Self-validation
     
     # Deduplication metrics
     unique_requirement_count: int = 0

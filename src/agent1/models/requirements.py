@@ -7,26 +7,17 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-
-class RuleType(str, Enum):
-    """Types of regulatory requirements that can be extracted."""
-    DATA_QUALITY_THRESHOLD = "data_quality_threshold"
-    OWNERSHIP_CATEGORY = "ownership_category"
-    BENEFICIAL_OWNERSHIP_THRESHOLD = "beneficial_ownership_threshold"
-    DOCUMENTATION_REQUIREMENT = "documentation_requirement"
-    UPDATE_REQUIREMENT = "update_requirement"
-    UPDATE_TIMELINE = "update_timeline"
+# Import canonical RuleType from shared module
+from shared.models import RuleType, RULE_TYPE_CODES
 
 
-# Type code mapping for requirement ID generation
-RULE_TYPE_CODES: dict[RuleType, str] = {
-    RuleType.DATA_QUALITY_THRESHOLD: "DQ",
-    RuleType.OWNERSHIP_CATEGORY: "OWN",
-    RuleType.BENEFICIAL_OWNERSHIP_THRESHOLD: "BO",
-    RuleType.DOCUMENTATION_REQUIREMENT: "DOC",
-    RuleType.UPDATE_REQUIREMENT: "UPD",
-    RuleType.UPDATE_TIMELINE: "TL",
-}
+class ChunkSkipReason(str, Enum):
+    """Reason why a chunk yielded zero extractions (CF-3)."""
+    NO_EXTRACTABLE_CONTENT = "no_extractable_content"  # Chunk has no regulatory obligations
+    PARSE_ERROR = "parse_error"  # LLM response parsing failed
+    BELOW_THRESHOLD = "below_threshold"  # All extractions below confidence threshold
+    LLM_ERROR = "llm_error"  # LLM call failed
+    EMPTY_RESPONSE = "empty_response"  # LLM returned empty/null response
 
 
 # Attribute schemas for validation
@@ -149,11 +140,19 @@ class RegulatoryRequirement(BaseModel):
         return v
 
 
+class ChunkSkipRecord(BaseModel):
+    """Record of a skipped chunk with reason (CF-3)."""
+    chunk_id: str
+    skip_reason: ChunkSkipReason
+    detail: str = ""  # Optional additional context
+
+
 class ExtractionMetadata(BaseModel):
     """Stats about the extraction run."""
     total_chunks_processed: int
     total_requirements_extracted: int
-    chunks_with_zero_extractions: list[str] = Field(default_factory=list)
+    chunks_with_zero_extractions: list[str] = Field(default_factory=list)  # Legacy: just IDs
+    skipped_chunks: list[ChunkSkipRecord] = Field(default_factory=list)  # CF-3: With reasons
     avg_confidence: float = 0.0
     rule_type_distribution: dict[str, int] = Field(default_factory=dict)
     extraction_iteration: int
