@@ -120,6 +120,10 @@ class RegulatoryRequirement(BaseModel):
         description="Type-specific fields. Keys and required/optional status depend on rule_type."
     )
     metadata: RuleMetadata
+    parent_component_id: str | None = Field(
+        default=None,
+        description="Component ID (P-001, C-001, R-001) from which this requirement was extracted."
+    )
 
     @staticmethod
     def generate_requirement_id(rule_type: RuleType, rule_description: str, grounded_in: str) -> str:

@@ -18,3 +18,10 @@ prompts:
       v1.0_retry:
         file: "requirement_atomizer/v1.0_retry.yaml"
         description: "Conservative retry prompt with higher confidence threshold"
+
+  grc_extractor:
+    current_version: "v1.0"
+    versions:
+      v1.0:
+        file: "grc_extractor/v1.0.yaml"
+        description: "GRC component extraction from table chunks (ported from rule_extraction v1.2)"
