@@ -55,7 +55,7 @@ The agent transforms unstructured regulatory text into structured, validated dat
 
 ### Core Capabilities
 - **Automated Document Segmentation**: Intelligently splits regulatory documents into extractable sections
-- **Multi-Mode Extraction**: Supports both rule extraction and GRC component (policies, risks, controls) extraction
+- **Agent1 Pipeline Extraction**: Uses the Agent1 pipeline for comprehensive regulatory requirement extraction
 - **LLM Provider Flexibility**: Compatible with OpenAI (GPT-4, GPT-4o-mini) and Anthropic Claude (Opus, Sonnet, Haiku) models
 - **Structured Output**: Uses schema-based structured output when supported by the LLM, with fallback to JSON parsing
 - **Validation Pipeline**: Multi-stage validation, deduplication, and parsing to ensure data quality
@@ -120,63 +120,34 @@ MIN_CHUNK_SIZE=50
 
 ### Basic Usage
 
-#### 1. Simple Rule Extraction (Pipeline 1)
+#### 1. Preprocess a Document (No LLM)
 
 ```bash
-# Extract regulatory rules from a document
-python -m src.cli \
-  --provider openai \
-  --mode rules \
+# Parse DOCX into deterministic structured chunks
+python -m src.cli preprocess \
   --input data/regulatory_document.docx \
-  --output outputs/rules.json
-
-# Or use Anthropic Claude (recommended for better grounding)
-python -m src.cli \
-  --provider anthropic \
-  --mode rules \
-  --input data/regulatory_document.docx
+  --output outputs/chunks.json
 ```
 
-#### 2. GRC Component Extraction (Pipeline 1)
+#### 2. Discover Document Schema
 
 ```bash
-# Extract policies, risks, and controls
-python -m src.cli \
-  --provider anthropic \
-  --mode grc_components \
-  --input data/grc_policy.docx \
-  --output outputs/grc_components.json
+# Infer document structure using LLM
+python -m src.cli discover-schema \
+  --input data/regulatory_document.docx \
+  --output outputs/schema.json
 ```
 
-#### 3. Advanced Pipeline with Quality Evaluation (Pipeline 2)
+#### 3. Advanced Pipeline with Quality Evaluation
 
 ```bash
-# Run the complete Agent1 pipeline
+# Run the complete Agent1 pipeline (preprocess → schema → gate → atomize → eval)
 python -m src.cli atomize \
   --input data/compliance_doc.docx \
-  --provider anthropic \
   --output outputs/requirements.json
 
 # View the quality evaluation report
 cat outputs/requirements_eval.json
-```
-
-#### 4. Debug Mode
-
-```bash
-# Enable debug mode to see intermediate outputs
-python -m src.cli \
-  --provider anthropic \
-  --mode rules \
-  --input data/document.docx \
-  --debug \
-  --output outputs/rules_debug.json
-
-# Check debug artifacts in outputs/ directory:
-# - rules_debug_segments.json (segmentation output)
-# - rules_debug_raw_extraction.json (LLM raw output)
-# - rules_debug_validated.json (after validation)
-# - rules_debug_deduplicated.json (after deduplication)
 ```
 
 ### Quick Example
@@ -184,12 +155,8 @@ python -m src.cli \
 ```python
 # Programmatic API usage
 from pathlib import Path
-from src.cli import _build_llm
 from src.agent1.nodes.preprocessor import parse_and_chunk
 from src.agent1.nodes.schema_discovery import schema_discovery_agent
-
-# Build LLM client
-llm = _build_llm("anthropic", "claude-3-sonnet-20240229")
 
 # Step 1: Preprocess document
 result = parse_and_chunk(
@@ -210,7 +177,7 @@ print(f"Schema confidence: {schema.confidence_avg:.2f}")
 
 ## Architecture
 
-Kratos-discover is built as a **modular, multi-stage document processing system** that combines deterministic parsing with LLM-powered extraction and validation. The architecture consists of two main processing pipelines:
+Kratos-discover is built as a **modular, multi-stage document processing system** that combines deterministic parsing with LLM-powered extraction and validation. The architecture is centered around the Agent1 pipeline:
 
 ### System Overview
 
@@ -332,7 +299,7 @@ Output: requirements.json + eval_report.json
 
 ### Data Flow Diagrams
 
-#### Complete Data Flow (Pipeline 2 - Detailed)
+#### Complete Data Flow (Agent1 Pipeline - Detailed)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -542,7 +509,7 @@ Output: requirements.json + eval_report.json
 ### Core Components
 
 - **Agent1**: Advanced processing pipeline with deterministic parsing and confidence-based quality gates
-- **CLI**: Multi-mode command-line interface with 4 subcommands (extract, preprocess, discover-schema, atomize)
+- **CLI**: Command-line interface with 3 subcommands (preprocess, discover-schema, atomize)
 - **Shared Models**: Centralized enums and type definitions used across all modules
 - **Scoring System**: Multi-factor confidence scoring with grounding verification
 - **Data Models**: Pydantic models for Regulatory Requirements
@@ -553,37 +520,29 @@ This section provides detailed explanations of each module in the codebase, desc
 
 ### Command-Line Interface (`src/cli.py`)
 
-**Purpose**: Multi-mode entry point for all document processing operations
+**Purpose**: Entry point for all document processing operations
 
-The CLI module provides four distinct commands that expose different parts of the processing pipeline:
+The CLI module provides three commands that expose different parts of the processing pipeline:
 
-1. **`run` (default)**: Requirement extraction using Agent1 pipeline
-   - Advanced processing with deterministic parsing and quality gates
-   - Supports debug mode with intermediate output dumps
-   - Configurable LLM providers (OpenAI or Anthropic)
-   - Example: `python -m src.cli --provider openai`
-
-2. **`preprocess`**: Deterministic document parsing (no LLM)
-   - Parses DOCX/XLSX/CSV into structured chunks
+1. **`preprocess`**: Deterministic document parsing (no LLM)
+   - Parses DOCX into structured chunks
    - Configurable chunk sizes (default: max 3000, min 50 chars)
    - Returns document statistics (word count, page count, table count)
    - Example: `python -m src.cli preprocess --input doc.docx --output chunks.json`
 
-3. **`discover-schema`**: Document structure inference
+2. **`discover-schema`**: Document structure inference
    - Uses LLM (Claude recommended) to infer schema
    - Detects entities (tables, sections) and their fields
    - Returns schema map with confidence scores
-   - Example: `python -m src.cli discover-schema --input doc.docx --provider anthropic`
+   - Example: `python -m src.cli discover-schema --input doc.docx`
 
-4. **`atomize`**: Complete advanced pipeline (Nodes 1-5)
-   - Runs full agent1 pipeline with quality evaluation
+3. **`atomize`**: Complete Agent1 pipeline (Nodes 1-5)
+   - Runs full pipeline with quality evaluation
    - Includes preprocessing → schema discovery → confidence gate → atomization → quality checks
    - Outputs final requirements with quality metrics
-   - Example: `python -m src.cli atomize --input doc.docx --provider anthropic`
+   - Example: `python -m src.cli atomize --input doc.docx`
 
 **Key Functions**:
-- `_build_llm()`: Factory method that creates OpenAI or Anthropic LLM instances
-- `run()`: Orchestrates rule/GRC extraction workflow
 - `run_preprocess()`: Executes deterministic chunking
 - `run_schema_discovery()`: Runs schema inference
 - `run_atomizer()`: Executes full pipeline with evaluation
@@ -623,25 +582,6 @@ This module contains canonical enums and type mappings used by Agent1. It preven
    - `RISK_STATEMENT` → "RSK"
 
 These codes are used to generate readable IDs like "DQ-001", "OWN-002", etc.
-
-### Pipeline Runner (`src/pipeline_runner.py`)
-
-**Purpose**: Common orchestration utilities to reduce code duplication
-
-This module provides helper functions used by multiple CLI commands to standardize logging, error handling, and output formatting.
-
-**Key Features**:
-- Generates unique run IDs with timestamps
-- Structured logging with consistent formatting
-- Step-by-step execution with error recovery
-- JSON output serialization
-
-**Key Methods**:
-- `log_plan(steps)`: Logs the planned execution steps
-- `log_step(step_name)`: Logs the start of a step
-- `log_error(error)`: Logs errors with stack traces
-- `run_with_steps(steps)`: Executes a list of (name, function) tuples with error handling
-- `write_output(data, path)`: Writes results to JSON file
 
 ### Agent1 Pipeline - Advanced Processing
 
@@ -863,18 +803,17 @@ The atomizer is built from four sub-components:
 **Key Class**:
 ```python
 class RequirementAtomizerNode:
-    def __init__(self, llm, prompt_registry):
-        self.llm = llm
-        self.prompt_builder = PromptBuilder(prompt_registry)
-        self.batch_processor = BatchProcessor()
-        self.parser = ResponseParser()
+    def __init__(self, model_name: str = "claude-sonnet-4-20250514"):
+        self.model_name = model_name
+        self.batch_processor = BatchProcessor(model_name)
+        self.prompt_builder = PromptBuilder()
+        self.response_parser = ResponseParser()
         self.repairer = SchemaRepairer()
     
-    def atomize(
+    def __call__(
         self, 
-        chunks: List[ContentChunk], 
-        schema: SchemaMap
-    ) -> List[RegulatoryRequirement]
+        state: Phase1State
+    ) -> Phase1State
 ```
 
 **Output Structure** (`RegulatoryRequirement`):
@@ -1135,12 +1074,11 @@ Here's how the modules work together in a typical extraction workflow:
 
 **Scenario 1: Advanced Atomization**
 ```
-User runs: python -m src.cli atomize --provider anthropic
+User runs: python -m src.cli atomize --input doc.docx
 
 Flow:
 1. cli.py::run_atomizer() called
-2. Creates Anthropic LLM via _build_llm()
-3. Executes 5-stage pipeline:
+2. Executes 5-stage pipeline:
    - Stage 1: agent1.nodes.preprocessor.parse_and_chunk()
      → Returns PreprocessorOutput with chunks
    - Stage 2: agent1.nodes.schema_discovery.schema_discovery_agent()
@@ -1151,7 +1089,7 @@ Flow:
      → Returns List[RegulatoryRequirement] with confidence scores
    - Stage 5: agent1.eval.eval_node.eval_quality()
      → Returns EvalReport with quality metrics
-4. cli.py writes:
+3. cli.py writes:
    - requirements.json (extracted requirements)
    - evaluation.json (quality report)
    - schema.json (discovered schema)
@@ -1178,10 +1116,6 @@ Flow:
    - RuleType enum used for validation
    - RuleCategory enum used for classification
    - RULE_TYPE_CODES used for ID generation
-
-2. **pipeline_runner → cli**:
-   - All CLI commands use PipelineRunner utilities
-   - Standardizes logging and error handling
 
 ## Installation
 
@@ -1250,82 +1184,72 @@ Note: The `data/` directory is gitignored to prevent accidental commits of sensi
 
 ### Command-Line Interface
 
-#### Basic Rule Extraction
+#### Preprocess a Document (No LLM)
 
-Extract rules using OpenAI:
+Parse a DOCX into structured chunks:
 ```bash
-python -m src.cli --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
+python -m src.cli preprocess --input data/FDIC_370_GRC_Library_National_Bank.docx --output chunks.json
 ```
 
-Extract rules using Anthropic Claude:
+#### Discover Document Schema
+
+Infer document structure using the LLM:
 ```bash
-python -m src.cli --provider anthropic --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
+python -m src.cli discover-schema --input data/FDIC_370_GRC_Library_National_Bank.docx --output schema.json
+```
+
+#### Full Pipeline Extraction (Atomize)
+
+Extract regulatory requirements using the complete 5-stage pipeline:
+```bash
+python -m src.cli atomize --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
 ```
 
 Alternatively, if you installed the package:
 ```bash
-kratos-discover --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
-```
-
-#### GRC Component Extraction
-
-Extract policies, risks, and controls:
-```bash
-python -m src.cli --mode grc_components --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output grc_results.json
+kratos-discover atomize --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
 ```
 
 #### Advanced Options
 
-Enable debug mode with intermediate outputs:
-```bash
-python -m src.cli --provider openai --debug --dump-debug --output results.json
-```
-
-Override the active prompt version:
-```bash
-python -m src.cli --provider openai --prompt-version v1.2 --output results.json
-```
-
 Specify a custom output directory:
 ```bash
-python -m src.cli --provider openai --output-dir ./my_outputs
+python -m src.cli atomize --input data/document.docx --output-dir ./my_outputs
 ```
 
 Adjust logging level:
 ```bash
-python -m src.cli --provider openai --log-level DEBUG
+python -m src.cli atomize --input data/document.docx --log-level DEBUG
 ```
 
 ### Programmatic API
 
 ```python
 import os
+import subprocess
 from pathlib import Path
-from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI
-from src.agent1.orchestrator import Agent1Orchestrator
 
-# Configure LLM (choose one)
-# Option A: Anthropic Claude
-llm = ChatAnthropic(
-    model=os.getenv("CLAUDE_MODEL", "claude-opus-4-20250805"),
-    max_tokens=3000,
-    temperature=0
+# Use the CLI to run the full Agent1 pipeline programmatically
+result = subprocess.run(
+    [
+        "python", "-m", "src.cli", "atomize",
+        "--input", os.getenv("FDIC_370_PATH", "data/document.docx"),
+        "--output", "outputs/requirements.json",
+    ],
+    capture_output=True,
+    text=True
 )
 
-# Option B: OpenAI
-# llm = ChatOpenAI(
-#     model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-#     temperature=0
-# )
-
-# Create agent instance
-orchestrator = Agent1Orchestrator(llm=llm)
-
-# Extract requirements
-results = orchestrator.run(document_path=os.getenv("FDIC_370_PATH"))
-print(f"Extracted {len(results.requirements)} requirements")
-print(f"Quality Score: {results.evaluation.overall_score}")
+if result.returncode == 0:
+    import json
+    with open("outputs/requirements.json") as f:
+        data = json.load(f)
+    requirements = data.get("requirements", [])
+    print(f"Extracted {len(requirements)} requirements")
+    eval_report = data.get("eval_report", {})
+    print(f"Quality Score: {eval_report.get('overall_quality_score', 0):.2%}")
+else:
+    print(f"Error: {result.stderr}")
 ```
 
 ## Configuration
@@ -1565,34 +1489,9 @@ def main():
 ```
 
 **Subcommands**:
-- `run` - Default rule/GRC extraction
-- `preprocess` - Deterministic document parsing
-- `discover-schema` - Schema discovery
-- `atomize` - Complete Agent1 pipeline
-
-#### LLM Builder
-
-```python
-def _build_llm(provider: str, model_name: str = None) -> BaseChatModel:
-    """
-    Factory method to create LLM instances.
-    
-    Args:
-        provider: "openai" or "anthropic"
-        model_name: Model identifier (optional, uses env default)
-    
-    Returns:
-        BaseChatModel: LangChain LLM instance
-    
-    Supported Models:
-        OpenAI: gpt-4, gpt-4-turbo, gpt-4o, gpt-4o-mini
-        Anthropic: claude-3-opus-20240229, claude-3-sonnet-20240229, 
-                   claude-3-5-sonnet-20240229, claude-3-haiku-20240307
-    
-    Example:
-        llm = _build_llm("anthropic", "claude-3-5-sonnet-20240229")
-    """
-```
+- `preprocess` - Deterministic document parsing (Node 1)
+- `discover-schema` - Schema discovery (Nodes 1-3)
+- `atomize` - Complete Agent1 pipeline (Nodes 1-5)
 
 ### Agent1 Preprocessor (`agent1.nodes.preprocessor`)
 
@@ -1666,10 +1565,10 @@ def schema_discovery_agent(
     
     Example:
         from agent1.nodes.schema_discovery import schema_discovery_agent
-        from src.cli import _build_llm
         
-        llm = _build_llm("anthropic", "claude-3-sonnet-20240229")
-        schema = schema_discovery_agent(chunks, llm)
+        state = {"chunks": chunks, "prompt_versions": {}, "errors": []}
+        result = schema_discovery_agent(state)
+        schema = result.get("schema_map")
         
         print(f"Pattern: {schema.structural_pattern}")
         print(f"Entities: {len(schema.entities)}")
@@ -1729,8 +1628,7 @@ class RequirementAtomizerNode:
     Extracts atomic regulatory requirements with confidence scoring.
     
     Attributes:
-        llm: LangChain LLM instance
-        prompt_registry: PromptRegistry for versioned prompts
+        model_name: LLM model identifier (default: claude-sonnet-4-20250514)
         batch_processor: BatchProcessor for efficient API calls
         response_parser: ResponseParser for JSON parsing
         schema_repairer: SchemaRepairer for error recovery
@@ -1738,42 +1636,30 @@ class RequirementAtomizerNode:
     
     def __init__(
         self,
-        llm: BaseChatModel,
-        prompt_registry: PromptRegistry
+        model_name: str = "claude-sonnet-4-20250514"
     ):
-        """Initialize atomizer with LLM and prompt registry."""
+        """Initialize atomizer with optional model name."""
     
-    def atomize(
+    def __call__(
         self,
-        chunks: List[ContentChunk],
-        schema: SchemaMap
-    ) -> List[RegulatoryRequirement]:
+        state: Phase1State
+    ) -> Phase1State:
         """
-        Extract requirements from chunks using schema context.
+        Extract requirements from state using schema context.
         
         Args:
-            chunks: Preprocessed content chunks
-            schema: Discovered schema from Node 2
+            state: Phase1State with chunks, schema_map, and prompt_versions
         
         Returns:
-            List of RegulatoryRequirement objects with:
-                - requirement_id: str (e.g., "DQ-001")
-                - rule_type: RuleType enum value
-                - category: "rule" | "control" | "risk"
-                - description: str
-                - grounded_in: str (source text)
-                - confidence: float (0.0 to 1.0)
-                - attributes: Dict[str, Any]
-                - metadata: Dict[str, Any]
+            Updated Phase1State with requirements and extraction_metadata
         
         Example:
             from agent1.nodes.atomizer import RequirementAtomizerNode
-            from agent1.prompts.registry import PromptRegistry
             
-            registry = PromptRegistry(base_dir=Path("prompts"))
-            atomizer = RequirementAtomizerNode(llm, registry)
+            atomizer = RequirementAtomizerNode()
+            result = atomizer(state)
             
-            requirements = atomizer.atomize(chunks, schema)
+            requirements = result.get("requirements", [])
             print(f"Extracted {len(requirements)} requirements")
             
             high_conf = [r for r in requirements if r.confidence >= 0.85]
@@ -1914,7 +1800,7 @@ class GroundingVerifier:
             
             verifier = GroundingVerifier()
             is_grounded, score, chunk_id = verifier.verify(
-                requirement.description,
+                requirement.rule_description,
                 chunks,
                 threshold=0.75
             )
@@ -1926,63 +1812,14 @@ class GroundingVerifier:
         """
 ```
 
-### Prompt Registry (`src.prompts.registry`)
+### Prompt Files (`src/agent1/prompts/`)
 
-#### PromptRegistry
+Prompts are stored as YAML files in `src/agent1/prompts/`:
+- `requirement_atomizer/`: Versioned prompts for the requirement atomizer node
+- `schema_discovery/`: Versioned prompts for the schema discovery node
+- `registry.yaml`: Maps prompt names to active versions
 
-```python
-class PromptRegistry:
-    """
-    Manages versioned LLM prompts stored as YAML files.
-    
-    Features:
-        - Version control for prompts
-        - Active version tracking
-        - Dynamic prompt loading
-        - Template rendering
-    """
-    
-    def __init__(self, base_dir: Path):
-        """
-        Initialize registry with prompt directory.
-        
-        Args:
-            base_dir: Root directory containing prompts/
-        """
-    
-    def get_active_prompt(self, name: str) -> str:
-        """
-        Get the currently active prompt version.
-        
-        Args:
-            name: Prompt name (e.g., "rule_extraction", "requirement_atomizer")
-        
-        Returns:
-            str: Fully rendered prompt text
-        
-        Raises:
-            ValueError: If prompt name not found
-        
-        Example:
-            from pathlib import Path
-            from agent1.prompts.registry import PromptRegistry
-            
-            registry = PromptRegistry(base_dir=Path("."))
-            prompt = registry.get_active_prompt("requirement_atomizer")
-            
-            # Use in LLM call
-            response = llm.invoke(prompt)
-        """
-    
-    def get_prompt(self, name: str, version: str) -> str:
-        """Get specific prompt version."""
-    
-    def set_active_version(self, name: str, version: str):
-        """Change active version for a prompt."""
-    
-    def list_versions(self, name: str) -> List[str]:
-        """List all available versions for a prompt."""
-```
+The atomizer node loads prompts automatically from these YAML files at runtime.
 
 ### Data Models API
 
@@ -2226,8 +2063,8 @@ python -m src.cli atomize --input document.docx
 # Override with environment variables
 LLM_PROVIDER=openai python -m src.cli atomize --input document.docx
 
-# Override with CLI flags
-python -m src.cli atomize --input document.docx --provider anthropic
+# Use a specific model via environment variable
+CLAUDE_MODEL=claude-3-sonnet-20240229 python -m src.cli atomize --input document.docx
 ```
 
 ## Advanced Usage
@@ -2238,13 +2075,11 @@ python -m src.cli atomize --input document.docx --provider anthropic
 
 ```python
 from pathlib import Path
-from src.cli import _build_llm
 from agent1.nodes.preprocessor import parse_and_chunk
 from agent1.nodes.atomizer import RequirementAtomizerNode
 
-# Initialize once
-llm = _build_llm("anthropic", "claude-3-sonnet-20240229")
-atomizer = RequirementAtomizerNode(llm, prompt_registry)
+# Initialize atomizer once
+atomizer = RequirementAtomizerNode()
 
 # Process multiple documents
 documents = Path("data/").glob("*.docx")
@@ -2256,16 +2091,12 @@ for doc in documents:
     # Preprocess
     result = parse_and_chunk(doc, "docx")
     
-    # Discover schema (cached if similar structure)
-    schema = schema_discovery_agent(result.chunks, llm)
-    
-    # Extract requirements
-    requirements = atomizer.atomize(result.chunks, schema)
+    # Extract requirements using full pipeline via CLI
+    # (or use atomizer directly with state dict)
+    requirements = []
     all_requirements.extend(requirements)
     
-    print(f"  Extracted {len(requirements)} requirements")
-
-print(f"Total: {len(all_requirements)} requirements from {len(list(documents))} documents")
+    print(f"  Processed {result.total_chunks} chunks")
 ```
 
 #### Custom Confidence Threshold Filtering
@@ -2309,7 +2140,7 @@ from src.shared.models import RuleType, RULE_TYPE_CODES
 # Add custom rule type logic
 def classify_requirement(requirement: RegulatoryRequirement) -> RuleType:
     """Custom classification logic"""
-    text = requirement.description.lower()
+    text = requirement.rule_description.lower()
     
     # Check for quantitative thresholds
     if any(keyword in text for keyword in ["must be", "≥", ">=", "%", "threshold"]):
@@ -2347,7 +2178,7 @@ def export_to_csv(requirements: List[RegulatoryRequirement], output_path: Path):
         
         # Header
         writer.writerow([
-            "ID", "Type", "Category", "Description", 
+            "ID", "Type", "Description", 
             "Confidence", "Source Text", "Attributes"
         ])
         
@@ -2356,8 +2187,7 @@ def export_to_csv(requirements: List[RegulatoryRequirement], output_path: Path):
             writer.writerow([
                 req.requirement_id,
                 req.rule_type.value,
-                req.category,
-                req.description,
+                req.rule_description,
                 f"{req.confidence:.2f}",
                 req.grounded_in[:200],  # Truncate long text
                 str(req.attributes)
@@ -2389,14 +2219,13 @@ def upload_to_grc_platform(
         "requirements": [
             {
                 "external_id": req.requirement_id,
-                "title": req.description[:100],
-                "description": req.description,
+                "title": req.rule_description[:100],
+                "description": req.rule_description,
                 "type": req.rule_type.value,
-                "category": req.category,
                 "confidence_score": req.confidence,
                 "source_reference": req.grounded_in,
                 "custom_attributes": req.attributes,
-                "metadata": req.metadata
+                "metadata": req.metadata.model_dump() if req.metadata else {}
             }
             for req in requirements
         ]
@@ -2440,8 +2269,7 @@ def save_to_database(requirements: List[RegulatoryRequirement], db_path: str):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             requirement_id TEXT UNIQUE,
             rule_type TEXT,
-            category TEXT,
-            description TEXT,
+            rule_description TEXT,
             grounded_in TEXT,
             confidence REAL,
             attributes TEXT,
@@ -2454,14 +2282,13 @@ def save_to_database(requirements: List[RegulatoryRequirement], db_path: str):
     for req in requirements:
         cursor.execute("""
             INSERT OR REPLACE INTO requirements 
-            (requirement_id, rule_type, category, description, grounded_in, 
+            (requirement_id, rule_type, rule_description, grounded_in, 
              confidence, attributes, metadata, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             req.requirement_id,
             req.rule_type.value,
-            req.category,
-            req.description,
+            req.rule_description,
             req.grounded_in,
             req.confidence,
             str(req.attributes),
@@ -2515,10 +2342,6 @@ def benchmark_extraction(
         
         # Preprocess with specific chunk size
         result = parse_and_chunk(file_path, "docx", max_chunk_chars=max_size)
-        
-        # Extract requirements
-        llm = _build_llm(provider)
-        requirements = atomizer.atomize(result.chunks, schema)
         
         elapsed = time.time() - start
         
@@ -2577,7 +2400,8 @@ import hashlib
 @lru_cache(maxsize=128)
 def cached_llm_call(prompt_hash: str, llm_provider: str) -> str:
     """Cache LLM responses for identical prompts."""
-    llm = _build_llm(llm_provider)
+    from langchain_anthropic import ChatAnthropic
+    llm = ChatAnthropic(model="claude-3-haiku-20240307", max_tokens=1000, temperature=0)
     response = llm.invoke(prompt_hash)
     return response
 
@@ -2596,14 +2420,10 @@ from pathlib import Path
 
 def process_document(file_path: Path) -> List[RegulatoryRequirement]:
     """Process single document (thread-safe)."""
-    # Each thread gets its own LLM instance
-    llm = _build_llm("anthropic")
-    
+    # LLM is configured via environment variables (ANTHROPIC_API_KEY / OPENAI_API_KEY)
     result = parse_and_chunk(file_path, "docx")
-    schema = schema_discovery_agent(result.chunks, llm)
-    requirements = atomizer.atomize(result.chunks, schema)
-    
-    return requirements
+    # Use the CLI pipeline for full extraction; this is a preprocessing-only example
+    return []
 
 def process_batch(file_paths: List[Path], max_workers: int = 4):
     """Process multiple documents in parallel."""
@@ -3119,9 +2939,10 @@ def test_parse_and_chunk():
 def test_schema_discovery():
     """Test schema discovery."""
     chunks = [...]  # Load test chunks
-    llm = _build_llm("anthropic", "claude-3-haiku")  # Use cheap model for tests
+    state = {"chunks": chunks, "prompt_versions": {}, "errors": []}
     
-    schema = schema_discovery_agent(chunks, llm)
+    result = schema_discovery_agent(state)
+    schema = result.get("schema_map")
     
     assert 0.0 <= schema.confidence_avg <= 1.0
     assert len(schema.entities) > 0
@@ -3158,19 +2979,22 @@ def test_end_to_end_extraction():
     """Test complete extraction pipeline."""
     # Setup
     file_path = Path("tests/fixtures/test_document.docx")
-    llm = _build_llm("anthropic", "claude-3-haiku")
     
     # Preprocess
     result = parse_and_chunk(file_path, "docx")
     assert result.total_chunks > 0
     
     # Discover schema
-    schema = schema_discovery_agent(result.chunks, llm)
+    state = {"chunks": result.chunks, "prompt_versions": {}, "errors": []}
+    schema_result = schema_discovery_agent(state)
+    schema = schema_result.get("schema_map")
     assert schema.confidence_avg > 0.5
     
     # Extract requirements
-    atomizer = RequirementAtomizerNode(llm, prompt_registry)
-    requirements = atomizer.atomize(result.chunks, schema)
+    atomizer = RequirementAtomizerNode()
+    state["schema_map"] = schema
+    atomizer_result = atomizer(state)
+    requirements = atomizer_result.get("requirements", [])
     assert len(requirements) > 0
     
     # Evaluate quality
@@ -3181,7 +3005,7 @@ def test_end_to_end_extraction():
     for req in requirements:
         assert req.requirement_id
         assert req.rule_type
-        assert req.description
+        assert req.rule_description
         assert 0.0 <= req.confidence <= 1.0
 ```
 
@@ -3250,19 +3074,19 @@ def test_end_to_end_extraction():
 **Adjust Chunk Sizes**:
 ```bash
 # Smaller chunks (better for dense documents with short requirements)
-python -m src.cli preprocess --max-chunk-size 2000 --min-chunk-size 100
+python -m src.cli preprocess --input doc.docx --max-chunk-chars 2000 --min-chunk-chars 100
 
 # Larger chunks (better for narrative documents with long requirements)
-python -m src.cli preprocess --max-chunk-size 5000 --min-chunk-size 200
+python -m src.cli preprocess --input doc.docx --max-chunk-chars 5000 --min-chunk-chars 200
 ```
 
 **Use Appropriate Modes**:
 - Use `atomize` command for production-quality extraction with full evaluation
 
-**Enable Debug Mode for Troubleshooting**:
+**Enable Verbose Logging for Troubleshooting**:
 ```bash
 # See intermediate outputs and what the LLM actually returns
-python -m src.cli --debug atomize --provider anthropic --input document.docx
+python -m src.cli atomize --input document.docx --log-level DEBUG
 ```
 
 ## Understanding the Workflow
@@ -3314,7 +3138,7 @@ python -m src.cli preprocess --input doc.docx --output chunks.json
 
 **Command**:
 ```bash
-python -m src.cli discover-schema --input doc.docx --provider anthropic --output schema.json
+python -m src.cli discover-schema --input doc.docx --output schema.json
 ```
 
 ### Workflow 3: Advanced Atomization (Full Pipeline)
@@ -3348,7 +3172,7 @@ python -m src.cli discover-schema --input doc.docx --provider anthropic --output
 
 **Command**:
 ```bash
-python -m src.cli atomize --input doc.docx --provider anthropic --output-dir ./results/
+python -m src.cli atomize --input doc.docx --output-dir ./results/
 ```
 
 **Output Files**:
@@ -3358,31 +3182,19 @@ python -m src.cli atomize --input doc.docx --provider anthropic --output-dir ./r
 
 ### Workflow Comparison
 
-| Feature | Simple Rules | GRC Extraction | Preprocessing | Schema Discovery | Atomization |
-|---------|--------------|----------------|---------------|------------------|-------------|
-| **LLM Required** | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
-| **Speed** | Fast | Fast | Very Fast | Fast | Slower |
-| **Quality Checks** | Basic | Basic | None | N/A | Comprehensive |
-| **Confidence Scoring** | Yes | Yes | N/A | Yes | Multi-factor |
-| **Grounding Verification** | Yes | Yes | N/A | N/A | Yes + Extra Checks |
-| **Deduplication** | Yes | Yes | N/A | N/A | Yes |
-| **Schema Validation** | Yes | Yes | N/A | Yes | Yes + Compliance Check |
-| **Quality Report** | No | No | No | No | ✅ Yes |
-| **Best For** | Quick extraction | GRC documents | Inspection | Structure analysis | Production use |
+| Feature | Preprocessing | Schema Discovery | Atomization |
+|---------|---------------|------------------|-------------|
+| **LLM Required** | ❌ No | ✅ Yes | ✅ Yes |
+| **Speed** | Very Fast | Fast | Slower |
+| **Quality Checks** | None | N/A | Comprehensive |
+| **Confidence Scoring** | N/A | Yes | Multi-factor |
+| **Grounding Verification** | N/A | N/A | Yes + Extra Checks |
+| **Deduplication** | N/A | N/A | Yes |
+| **Schema Validation** | N/A | Yes | Yes + Compliance Check |
+| **Quality Report** | No | No | ✅ Yes |
+| **Best For** | Inspection | Structure analysis | Production use |
 
 ### Choosing the Right Workflow
-
-**Choose Simple Rule Extraction when**:
-- You need quick results
-- Document format is well-understood
-- Basic quality checks are sufficient
-- Cost/speed is priority over comprehensive validation
-
-**Choose GRC Component Extraction when**:
-- Working with GRC library documents
-- Need separate policies, risks, and controls
-- Document has structured GRC sections
-- Following GRC standards (like FDIC 370)
 
 **Choose Preprocessing when**:
 - Inspecting document structure first
@@ -3411,36 +3223,30 @@ python -m src.cli atomize --input doc.docx --provider anthropic --output-dir ./r
 python -m src.cli preprocess --input doc.docx --output chunks.json
 
 # Step 2: Understand schema (small LLM cost)
-python -m src.cli discover-schema --input doc.docx --provider anthropic --output schema.json
+python -m src.cli discover-schema --input doc.docx --output schema.json
 
 # Step 3: Extract with full pipeline (higher cost, highest quality)
-python -m src.cli atomize --input doc.docx --provider anthropic --output-dir ./results/
+python -m src.cli atomize --input doc.docx --output-dir ./results/
 ```
 
 #### Pattern 2: Quick Iteration
 ```bash
-# Start with simple extraction for speed
-python -m src.cli --provider openai --input doc.docx --output rules_v1.json
+# Start with schema discovery to understand structure
+python -m src.cli discover-schema --input doc.docx --output schema.json
 
-# Review results, then run with GRC mode if needed
-python -m src.cli --mode grc_components --provider openai --input doc.docx --output grc_v1.json
-
-# Finally, run full pipeline for production
-python -m src.cli atomize --input doc.docx --provider anthropic --output-dir ./production/
+# Review schema, then run full pipeline for production
+python -m src.cli atomize --input doc.docx --output-dir ./production/
 ```
 
-#### Pattern 3: Debug Mode Investigation
+#### Pattern 3: Inspect Intermediate Outputs
 ```bash
-# Run with debug mode to see intermediate outputs
-python -m src.cli --debug --dump-debug --provider openai --input doc.docx
+# Step 1: Preprocess to inspect chunks
+python -m src.cli preprocess --input doc.docx --output chunks.json
+cat chunks.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'Chunks: {d[\"total_chunks\"]}')"
 
-# Inspect debug directory
-ls -la debug_*
-
-# Review intermediate files
-cat debug_*/raw_rules.json      # Initial LLM output
-cat debug_*/validated_rules.json # After validation
-cat debug_*/deduped_rules.json  # After deduplication
+# Step 2: Discover schema to inspect structure
+python -m src.cli discover-schema --input doc.docx --output schema.json
+cat schema.json
 ```
 
 ## Development
@@ -3465,17 +3271,7 @@ pytest tests/test_agent1_preprocessor.py
 
 ## Quick Start Examples
 
-### Example 1: Extract Rules from a Document
-
-```bash
-# Using OpenAI
-python -m src.cli --provider openai --input data/document.docx --output rules.json
-
-# Using Anthropic Claude (recommended for better accuracy)
-python -m src.cli --provider anthropic --input data/document.docx --output rules.json
-```
-
-### Example 2: Preprocess a Document (No LLM)
+### Example 1: Preprocess a Document (No LLM)
 
 ```bash
 # Parse DOCX into structured chunks
@@ -3484,62 +3280,31 @@ python -m src.cli preprocess --input data/document.docx --output chunks.json
 # Configure chunk sizes
 python -m src.cli preprocess \
   --input data/document.docx \
-  --max-chunk-size 5000 \
-  --min-chunk-size 100 \
+  --max-chunk-chars 5000 \
+  --min-chunk-chars 100 \
   --output chunks.json
 ```
 
-### Example 3: Discover Document Schema
+### Example 2: Discover Document Schema
 
 ```bash
 # Infer document structure using LLM
 python -m src.cli discover-schema \
   --input data/document.docx \
-  --provider anthropic \
   --output schema.json
 ```
 
-### Example 4: Run Full Advanced Pipeline
+### Example 3: Run Full Advanced Pipeline
 
 ```bash
 # Execute complete 5-stage pipeline with quality evaluation
 python -m src.cli atomize \
   --input data/document.docx \
-  --provider anthropic \
   --output-dir ./results/
 ```
 
-This creates three output files:
-- `results/requirements.json`: Extracted requirements
-- `results/evaluation.json`: Quality assessment report
-- `results/schema.json`: Discovered document schema
-
-### Example 5: Extract GRC Components
-
-```bash
-# Extract policies, risks, and controls
-python -m src.cli \
-  --mode grc_components \
-  --provider openai \
-  --input data/grc_document.docx \
-  --output grc_components.json
-```
-
-### Example 6: Debug Mode with Intermediate Outputs
-
-```bash
-# Enable debug mode to see intermediate results
-python -m src.cli \
-  --provider openai \
-  --debug \
-  --dump-debug \
-  --output results.json
-
-# This creates a timestamped debug directory with:
-# - raw_rules.json (initial LLM output)
-# - validated_rules.json (post-validation)
-# - deduped_rules.json (after deduplication)
-```
+This creates output files in the results directory:
+- `results/requirements_*.json`: Extracted requirements with quality report
 
 ## Agent1 Deterministic Preprocessor
 
@@ -3741,39 +3506,42 @@ print(f"Rationale: {gate_decision.rationale}")
 
 ```python
 from pathlib import Path
-from langchain_anthropic import ChatAnthropic
 from src.agent1.nodes.preprocessor import parse_and_chunk
 from src.agent1.nodes.schema_discovery import schema_discovery_agent
 from src.agent1.nodes.atomizer import RequirementAtomizerNode
-from src.prompt_registry import PromptRegistry
 
-# Initialize components
-llm = ChatAnthropic(model="claude-opus-4-20250805", temperature=0)
-prompt_registry = PromptRegistry(base_dir=Path("."))
-
-# Run preprocessing and schema discovery
+# Run preprocessing
 prep_output = parse_and_chunk(
     file_path=Path("data/document.docx"),
     file_type="docx"
 )
-schema = schema_discovery_agent(chunks=prep_output.chunks, llm=llm)
 
-# Extract requirements
-atomizer = RequirementAtomizerNode(llm=llm, prompt_registry=prompt_registry)
-requirements = atomizer.atomize(
-    chunks=prep_output.chunks,
-    schema=schema
-)
+# Run schema discovery
+state = {
+    "file_path": str(prep_output.file_path),
+    "chunks": prep_output.chunks,
+    "prompt_versions": {},
+    "errors": [],
+}
+schema_result = schema_discovery_agent(state)
+schema = schema_result.get("schema_map")
+
+# Extract requirements with atomizer
+state["schema_map"] = schema
+atomizer = RequirementAtomizerNode()
+atomizer_result = atomizer(state)
+requirements = atomizer_result.get("requirements", [])
 
 print(f"Extracted {len(requirements)} requirements")
 
 # Show first requirement
-req = requirements[0]
-print(f"ID: {req.requirement_id}")
-print(f"Type: {req.rule_type}")
-print(f"Description: {req.description}")
-print(f"Confidence: {req.confidence:.2f}")
-print(f"Grounded in: {req.grounded_in[:200]}...")
+if requirements:
+    req = requirements[0]
+    print(f"ID: {req.requirement_id}")
+    print(f"Type: {req.rule_type}")
+    print(f"Description: {req.rule_description}")
+    print(f"Confidence: {req.confidence:.2f}")
+    print(f"Grounded in: {req.grounded_in[:200]}...")
 ```
 
 #### Example 4: Quality Evaluation
@@ -3970,16 +3738,17 @@ kratos-discover/
 
 ### Debug Mode
 
-Debug mode provides visibility into the extraction pipeline:
+Use verbose logging to get visibility into the extraction pipeline:
 
 ```bash
-python -m src.cli --debug --dump-debug --provider openai
+python -m src.cli atomize --input doc.docx --log-level DEBUG
 ```
 
-This creates a timestamped debug directory containing:
-- `raw_rules.json`: Initial LLM extraction output
-- `validated_rules.json`: Post-validation results
-- `deduped_rules.json`: After deduplication
+Use `preprocess` and `discover-schema` separately to inspect intermediate outputs:
+```bash
+python -m src.cli preprocess --input doc.docx --output chunks.json
+python -m src.cli discover-schema --input doc.docx --output schema.json
+```
 
 ## Quality Assurance
 
@@ -4087,19 +3856,18 @@ chmod +r data/document.docx
 export OPENAI_TIMEOUT=180
 export ANTHROPIC_TIMEOUT=180
 
-# 2. Process smaller chunks
-python -m src.cli atomize \
+# 2. Process smaller chunks (preprocess first to check chunk sizes)
+python -m src.cli preprocess \
   --input document.docx \
-  --max-chunk-size 2000
+  --max-chunk-chars 2000
 
-# 3. Use faster model
+# 3. Use faster model (set via environment variable)
+export CLAUDE_MODEL=claude-3-haiku-20240307
 python -m src.cli atomize \
-  --input document.docx \
-  --provider anthropic \
-  --model claude-3-haiku-20240307
+  --input document.docx
 
-# 4. Enable debug mode to see where it hangs
-python -m src.cli atomize --input document.docx --debug
+# 4. Enable verbose logging to see where it hangs
+python -m src.cli atomize --input document.docx --log-level DEBUG
 ```
 
 #### Rate Limiting Errors
@@ -4136,10 +3904,10 @@ for batch in batches:
 
 **Solutions**:
 ```bash
-# 1. Process in smaller chunks
-python -m src.cli atomize \
+# 1. Process in smaller chunks (preprocess first to check sizes)
+python -m src.cli preprocess \
   --input large_document.docx \
-  --max-chunk-size 1500
+  --max-chunk-chars 1500
 
 # 2. Disable caching if memory constrained
 export ENABLE_CACHING=false
@@ -4163,12 +3931,12 @@ watch -n 1 free -h
 # 1. Enable schema repair
 # This is enabled by default in atomizer
 
-# 2. Check LLM response in debug mode
-python -m src.cli atomize --input document.docx --debug
-# Then inspect outputs/*_raw_extraction.json
+# 2. Check LLM response with verbose logging
+python -m src.cli atomize --input document.docx --log-level DEBUG
+# Then inspect outputs/*.json
 
 # 3. Try different model (Claude often produces better JSON)
-python -m src.cli atomize --input document.docx --provider anthropic
+# Set ANTHROPIC_API_KEY in your .env and use CLAUDE_MODEL env var
 
 # 4. Validate JSON manually
 import json
@@ -4201,7 +3969,7 @@ cat outputs/*_eval.json | jq '.failures_by_check'
    # Solutions:
    # - Clean document formatting
    # - Use smaller chunk sizes to preserve context
-   python -m src.cli atomize --input doc.docx --max-chunk-size 2000
+   python -m src.cli preprocess --input doc.docx --max-chunk-chars 2000
    ```
 
 2. **High Testability Failures**:
@@ -4224,8 +3992,9 @@ cat outputs/*_eval.json | jq '.failures_by_check'
    ```bash
    # LLM is fabricating content
    # Solutions:
-   # - Switch to Claude (better grounding)
-   python -m src.cli atomize --input doc.docx --provider anthropic --model claude-3-opus
+   # - Switch to Claude (better grounding) by setting ANTHROPIC_API_KEY
+   export CLAUDE_MODEL=claude-3-opus-20240229
+   python -m src.cli atomize --input doc.docx
    
    # - Use stricter prompts
    # - Lower temperature (already 0.0 by default)
@@ -4257,14 +4026,13 @@ cat outputs/*_eval.json | jq '.failures_by_check'
 **Solutions**:
 ```bash
 # 1. Check schema output
-python -m src.cli discover-schema --input document.docx --provider anthropic
+python -m src.cli discover-schema --input document.docx
 # Review entity structure
 
-# 2. Use Claude Opus for better schema discovery
+# 2. Use Claude Opus for better schema discovery (set via environment variable)
+export CLAUDE_MODEL=claude-3-opus-20240229
 python -m src.cli atomize \
-  --input document.docx \
-  --provider anthropic \
-  --model claude-3-opus-20240229
+  --input document.docx
 
 # 3. Lower gate threshold (if acceptable)
 # Edit agent1/config/gate_config.yaml:
@@ -4290,9 +4058,9 @@ time python -m src.cli atomize --input document.docx
 
 **Solutions**:
 ```bash
-# 1. Use faster model
-python -m src.cli atomize --input doc.docx \
-  --provider anthropic --model claude-3-haiku-20240307
+# 1. Use faster model (set via environment variable)
+export CLAUDE_MODEL=claude-3-haiku-20240307
+python -m src.cli atomize --input doc.docx
 
 # 2. Enable caching for repeated structures
 export ENABLE_CACHING=true
@@ -4319,33 +4087,23 @@ ping api.anthropic.com
 
 ```bash
 # Set log level to DEBUG
-export LOG_LEVEL=DEBUG
+export KRATOS_LOG_LEVEL=DEBUG
 python -m src.cli atomize --input document.docx
 
-# Or use CLI flag
-python -m src.cli --log-level DEBUG atomize --input document.docx
-
-# View structured logs
-tail -f logs/kratos.log | jq '.'
+# Or use CLI flag (on any subcommand)
+python -m src.cli atomize --log-level DEBUG --input document.docx
 ```
 
-##### Inspect Intermediate Artifacts
+##### Inspect Intermediate Outputs
 
 ```bash
-# Enable debug mode
-python -m src.cli atomize --input document.docx --debug
+# Run preprocessing separately to inspect chunks
+python -m src.cli preprocess --input document.docx --output chunks.json
+cat chunks.json | jq '.chunks[0:3]'
 
-# Check generated artifacts:
-ls outputs/*_debug_*
-
-# View preprocessing output
-cat outputs/document_debug_chunks.json | jq '.[0:3]'
-
-# View schema discovery output
-cat outputs/document_debug_schema.json | jq '.entities'
-
-# View raw LLM responses
-cat outputs/document_debug_raw_extraction.json | jq '.'
+# Run schema discovery to inspect structure
+python -m src.cli discover-schema --input document.docx --output schema.json
+cat schema.json | jq '.schema_map.entities'
 ```
 
 ##### Test Components Individually
@@ -4367,9 +4125,9 @@ print(result.chunks[0])  # Inspect first chunk
 
 ```python
 # Make direct LLM call to test
-from src.cli import _build_llm
+from langchain_anthropic import ChatAnthropic
 
-llm = _build_llm("anthropic", "claude-3-sonnet-20240229")
+llm = ChatAnthropic(model="claude-3-haiku-20240307", max_tokens=1000, temperature=0)
 
 response = llm.invoke("Extract one regulatory rule from this text: 'Banks must maintain customer records with 95% accuracy.'")
 print(response.content)
@@ -4395,7 +4153,7 @@ If you encounter issues not covered here:
 
 1. **Check Logs**: Review debug logs for detailed error information
 2. **Search Issues**: Check [GitHub Issues](https://github.com/sumitasthana/kratos-discover/issues)
-3. **Enable Debug Mode**: Run with `--debug` flag to see intermediate outputs
+3. **Enable Verbose Logging**: Run with `--log-level DEBUG` flag to see detailed outputs
 4. **Minimal Reproduction**: Create smallest example that reproduces the issue
 5. **Report Bug**: Open issue with:
    - Full error message and stack trace
@@ -4433,7 +4191,7 @@ docker run --rm \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/outputs:/app/outputs \
   kratos-discover \
-  --provider openai --input data/document.docx
+  atomize --input data/document.docx
 ```
 
 ### Using Docker Compose
@@ -4444,7 +4202,7 @@ docker-compose up
 
 # Run extraction
 docker-compose run kratos-discover \
-  --provider openai --input data/document.docx
+  atomize --input data/document.docx
 ```
 
 For detailed deployment instructions, see the [Deployment Guide](wiki/Deployment-Guide.md).
