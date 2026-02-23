@@ -1,10 +1,10 @@
-# Phase 1 Component: Confidence Scorer
+# Node 3: Confidence Gate
 
-**Status**: 🚧 Planned
+**Status**: Complete
 
 ## Overview
 
-The Confidence Scorer is a critical component in the Phase 1 pipeline responsible for assigning and validating confidence scores to extracted data. It ensures that all outputs include reliable quality metrics to support downstream decision-making.
+The Confidence Gate is the third node in the Agent1 pipeline. It evaluates the quality of the discovered schema and makes a structured decision about whether to proceed with extraction, require human review, or reject the document. The gate uses configurable thresholds loaded from YAML configuration.
 
 ## Table of Contents
 
@@ -13,157 +13,220 @@ The Confidence Scorer is a critical component in the Phase 1 pipeline responsibl
 - [Architecture](#architecture)
 - [Usage](#usage)
 - [Configuration](#configuration)
-- [Scoring Methodology](#scoring-methodology)
+- [Decision Logic](#decision-logic)
 - [Output Format](#output-format)
 - [Next Steps](#next-steps)
 
 ## Purpose
 
-*This component is currently in the planning phase. Content will be added as the component is developed.*
-
-The Confidence Scorer will:
-- Assign confidence scores to extracted rules, policies, risks, and controls
-- Validate score consistency and reasonableness
-- Aggregate scores from multiple sources
-- Flag low-confidence extractions for review
+The Confidence Gate:
+- Evaluates schema discovery confidence against configurable thresholds
+- Makes structured decisions: accept, human_review, or reject
+- Checks schema compliance and coverage metrics when available
+- Provides detailed rationale for gate decisions
+- Prevents low-quality extractions from proceeding
 
 ## Key Features
 
-*To be documented upon implementation*
-
-### Planned Capabilities
-
-- Multi-factor confidence scoring
-- Source grounding verification
-- Schema adherence validation
-- Cross-reference validation
-- Confidence threshold enforcement
-- Quality metrics reporting
+- **Structured Decisions**: Returns a GateDecision object with decision, score, and rationale
+- **Configurable Thresholds**: Thresholds loaded from YAML config file
+- **Document Format Awareness**: Different thresholds can be set per document format
+- **Multi-Factor Evaluation**: Checks confidence, schema compliance, and coverage
+- **Conditional Flags**: Identifies issues that warrant review but not rejection
 
 ## Architecture
 
-*Architecture details will be added during implementation*
-
-### Planned Module Structure
+### Module Structure
 
 ```
-src/confidence_scorer/  (tentative)
-  ├── __init__.py
-  ├── scorer.py
-  ├── validators.py
-  ├── aggregators.py
-  └── models/
-      └── scores.py
+src/agent1/nodes/
+  confidence_gate.py       # Gate logic and GateDecision model
+
+src/agent1/config/
+  gate_config.yaml         # Threshold configuration
+```
+
+### Processing Flow
+
+```
+SchemaMap -> Load Config -> Check Thresholds -> Evaluate Metrics
+                                                      |
+                                                      v
+                                              Build GateDecision:
+                                              - decision (accept/human_review/reject)
+                                              - score
+                                              - failing_checks
+                                              - conditional_flags
+                                              - rationale
 ```
 
 ## Usage
 
-*Usage examples will be provided once the component is implemented*
-
-### Placeholder API
+### Programmatic API
 
 ```python
-# Tentative API design (subject to change)
-from src.confidence_scorer import ConfidenceScorer
+from agent1.nodes.confidence_gate import check_confidence, GateDecision
 
-scorer = ConfidenceScorer()
-scored_items = scorer.score(extracted_items, source_context)
+# Build state with schema_map
+state = {
+    "schema_map": schema_map,
+    "eval_report": eval_report,  # Optional, for additional checks
+}
+
+# Run confidence gate
+gate_result: GateDecision = check_confidence(state)
+
+print(f"Decision: {gate_result.decision}")
+print(f"Score: {gate_result.score:.3f}")
+print(f"Rationale: {gate_result.rationale}")
+
+if gate_result.failing_checks:
+    print(f"Failing checks: {gate_result.failing_checks}")
 ```
+
+### In Pipeline Context
+
+The confidence gate is automatically called as part of the `atomize` command:
+
+```bash
+python cli.py atomize --input "document.docx"
+```
+
+If the gate rejects the document, the pipeline exits with an error.
 
 ## Configuration
 
-*Configuration options will be documented during development*
+### Gate Config File
 
-### Expected Configuration Parameters
+Configuration is stored in `src/agent1/config/gate_config.yaml`:
 
-- Minimum confidence threshold
-- Scoring weights for different factors
-- Validation rules
-- Aggregation strategies
+```yaml
+thresholds:
+  default:
+    auto_accept: 0.85      # Above this: automatic accept
+    human_review: 0.50     # Above this but below auto_accept: human review
+    min_schema_compliance: 0.50  # Minimum schema compliance ratio
+    min_coverage: 0.60     # Minimum chunk coverage ratio
+  
+  docx:
+    auto_accept: 0.80
+    human_review: 0.45
+```
 
-## Scoring Methodology
+### Threshold Descriptions
 
-*Detailed scoring methodology will be defined during implementation*
+| Threshold | Default | Description |
+|-----------|---------|-------------|
+| `auto_accept` | 0.85 | Confidence above this triggers automatic acceptance |
+| `human_review` | 0.50 | Confidence above this but below auto_accept triggers review |
+| `min_schema_compliance` | 0.50 | Minimum ratio of schema-compliant requirements |
+| `min_coverage` | 0.60 | Minimum ratio of chunks that yielded extractions |
 
-### Planned Scoring Factors
+## Decision Logic
 
-1. **Source Grounding**: Verification against original text
-2. **Schema Adherence**: Compliance with expected data structure
-3. **Completeness**: Presence of required fields
-4. **Consistency**: Alignment with related extractions
-5. **LLM Confidence**: Native confidence from language model
+The gate evaluates multiple factors to determine the decision:
 
-### Score Range
+### 1. Schema Confidence Check
 
-Expected to use a confidence range of 0.5 to 0.99, consistent with existing Rule confidence scores in the codebase. This range:
-- Has a minimum of 0.5 to filter out low-confidence extractions
-- Has a maximum of 0.99 to avoid claiming absolute certainty (reserving 1.0 as unattainable perfection)
+```
+if avg_confidence < human_review:
+    failing_checks.append("avg_confidence below minimum")
+elif avg_confidence < auto_accept:
+    conditional_flags.append("avg_confidence below auto_accept")
+```
+
+### 2. Schema Compliance Check (if eval_report available)
+
+```
+schema_ratio = 1.0 - (schema_issues / total_requirements)
+if schema_ratio < min_schema_compliance:
+    failing_checks.append("schema_compliance below threshold")
+```
+
+### 3. Coverage Check (if eval_report available)
+
+```
+if coverage_ratio < min_coverage:
+    failing_checks.append("coverage below threshold")
+```
+
+### 4. Final Decision
+
+| Condition | Decision |
+|-----------|----------|
+| Any failing_checks | reject |
+| confidence >= auto_accept AND no conditional_flags | accept |
+| confidence >= human_review | human_review |
+| Otherwise | reject |
 
 ## Output Format
 
-*Output format specifications will be defined during implementation*
-
-### Expected Output Structure
+### GateDecision Model
 
 ```python
-# Tentative structure
+@dataclass
+class GateDecision:
+    decision: Literal["accept", "human_review", "reject"]
+    score: float
+    thresholds_applied: dict[str, float]
+    failing_checks: list[str]
+    conditional_flags: list[str]
+    rationale: str
+```
+
+### Example Output
+
+```json
 {
-    "item_id": "RULE_001",
-    "confidence_score": 0.87,
-    "score_breakdown": {
-        "source_grounding": 0.95,
-        "schema_adherence": 0.82,
-        "completeness": 0.90,
-        "consistency": 0.85
-    },
-    "validation_flags": [],
-    "metadata": {}
+  "decision": "human_review",
+  "score": 0.72,
+  "thresholds_applied": {
+    "auto_accept": 0.85,
+    "human_review": 0.50,
+    "min_schema_compliance": 0.50,
+    "min_coverage": 0.60
+  },
+  "failing_checks": [],
+  "conditional_flags": [
+    "avg_confidence=0.720 < 0.85"
+  ],
+  "rationale": "Needs review: avg_confidence=0.720 < 0.85"
 }
 ```
+
+### Decision Outcomes
+
+| Decision | Pipeline Behavior |
+|----------|-------------------|
+| accept | Proceed to GRC Extractor and Atomizer |
+| human_review | Proceed with warning logged |
+| reject | Pipeline exits with error code 1 |
 
 ## Integration Points
 
 ### Input
 
-Receives data from:
-- **[Schema Discovery Agent](Phase1-Schema-Discovery-Agent.md)**
-- **[Atomizer Agent](Phase1-Atomizer-Agent.md)**
-- Existing extraction pipeline (RuleAgent)
+Receives from Node 2 (Schema Discovery):
+- `schema_map`: SchemaMap with avg_confidence
+- `eval_report`: Optional evaluation metrics
 
 ### Output
 
-Provides scored data to:
-- **[Eval Component](Phase1-Eval.md)**
-- Final output pipeline
-
-## Development Status
-
-**Current Status**: Not yet implemented
-
-**Planned Timeline**: TBD
-
-**Dependencies**: 
-- Parse and Chunk component (✅ Complete)
-- Schema Discovery Agent (🚧 Planned)
-
-## Quality Assurance
-
-The Confidence Scorer itself will include:
-- Unit tests for scoring algorithms
-- Validation tests for score consistency
-- Integration tests with upstream/downstream components
-- Performance benchmarks
+Provides to downstream nodes:
+- `gate_decision`: GateDecision object (serialized in output JSON)
 
 ## Next Steps
 
-This page will be updated with detailed documentation once the Confidence Scorer is implemented.
+After the confidence gate:
+1. **[GRC Extractor](Phase1-GRC-Extractor.md)** - Extracts Policy/Risk/Control components
+2. **[Atomizer](Phase1-Atomizer-Agent.md)** - Extracts atomic requirements
 
 ## Related Documentation
 
 - [Architecture Overview](Architecture.md)
-- [API Reference](API-Reference.md)
-- [Development Guide](Development-Guide.md)
+- [Schema Discovery Agent](Phase1-Schema-Discovery-Agent.md)
+- [Eval](Phase1-Eval.md)
 
 ---
 
-**Questions or Feedback?** [Open an issue](https://github.com/sumitasthana/kratos-discover/issues) to discuss the Confidence Scorer design.
+**Questions?** [Open an issue](https://github.com/sumitasthana/kratos-discover/issues) for confidence gate discussions.
