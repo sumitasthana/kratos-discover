@@ -1,37 +1,45 @@
 # Kratos-Discover Wiki
 
-This directory contains comprehensive documentation for the Kratos-Discover project.
+This directory contains comprehensive documentation for the Kratos-Discover Agent1 pipeline.
 
 ## Documentation Structure
 
-The wiki is organized into the following pages:
+### General Documentation
 
-1. **[Home](Home.md)** - Wiki landing page and overview
-2. **[Installation Guide](Installation-Guide.md)** - Setup and installation instructions
-3. **[Usage Guide](Usage-Guide.md)** - CLI and API usage examples
-4. **[Configuration](Configuration.md)** - Environment variables and settings
-5. **[Architecture](Architecture.md)** - System design and components
-6. **[API Reference](API-Reference.md)** - Programmatic API documentation
-7. **[Development Guide](Development-Guide.md)** - Contributing and development workflow
-8. **[Deployment Guide](Deployment-Guide.md)** - Docker and production deployment
-9. **[Troubleshooting](Troubleshooting.md)** - Common issues and solutions
+| Page | Description |
+|------|-------------|
+| [Home](Home.md) | Wiki landing page and overview |
+| [Installation Guide](Installation-Guide.md) | Setup and installation instructions |
+| [Usage Guide](Usage-Guide.md) | CLI and API usage examples |
+| [Configuration](Configuration.md) | Environment variables and settings |
+| [Architecture](Architecture.md) | System design and components |
+| [API Reference](API-Reference.md) | Programmatic API documentation |
+| [Development Guide](Development-Guide.md) | Contributing and development workflow |
+| [Deployment Guide](Deployment-Guide.md) | Docker and production deployment |
+| [Troubleshooting](Troubleshooting.md) | Common issues and solutions |
+
+### Pipeline Components
+
+| Node | Page | Description |
+|------|------|-------------|
+| 1 | [Parse and Chunk](Phase1-Parse-and-Chunk.md) | Deterministic document parsing |
+| 2 | [Schema Discovery](Phase1-Schema-Discovery-Agent.md) | Automatic schema inference |
+| 3 | [Confidence Gate](Phase1-Confidence-Scorer.md) | Quality gate with thresholds |
+| 3.5 | [GRC Extractor](Phase1-GRC-Extractor.md) | Policy/Risk/Control extraction |
+| 4 | [Atomizer](Phase1-Atomizer-Agent.md) | Requirement atomization |
+| 5 | [Eval](Phase1-Eval.md) | Quality assessment |
 
 ## Quick Links
 
 ### Getting Started
 - [Installation](Installation-Guide.md#installation-steps)
-- [Quick Start](Home.md#-quick-start)
-- [First Extraction](Usage-Guide.md#basic-examples)
+- [Quick Start](Home.md#quick-start)
+- [CLI Commands](Usage-Guide.md#cli-commands)
 
 ### Development
 - [Development Setup](Development-Guide.md#development-setup)
 - [Running Tests](Development-Guide.md#testing)
 - [Code Style](Development-Guide.md#code-style)
-
-### Deployment
-- [Docker Deployment](Deployment-Guide.md#docker-deployment)
-- [Production Setup](Deployment-Guide.md#production-deployment)
-- [Cloud Deployment](Deployment-Guide.md#cloud-deployment)
 
 ### Reference
 - [API Reference](API-Reference.md)
@@ -54,27 +62,11 @@ To improve or extend the documentation:
 - Keep table of contents updated
 - Cross-reference related pages
 - Use proper markdown formatting
+- Do not use emojis or icons
 
 ## Viewing the Documentation
 
-### Locally
-
-View the markdown files directly in your browser or text editor:
-
-```bash
-# View in browser (if you have a markdown viewer)
-open wiki/Home.md
-
-# View in terminal
-cat wiki/Home.md
-
-# Use a markdown viewer
-grip wiki/Home.md
-```
-
-### Online
-
-The wiki pages can also be accessed through GitHub's wiki feature (if enabled for the repository).
+View the markdown files directly in your IDE or text editor. The wiki pages can also be accessed through GitHub's wiki feature if enabled.
 
 ## License
 

@@ -1,10 +1,10 @@
-# Phase 1 Component: Eval
+# Node 5: Eval Quality
 
-**Status**: 🚧 Planned
+**Status**: Complete
 
 ## Overview
 
-The Eval component provides comprehensive evaluation and quality assessment capabilities for the extraction pipeline. It validates the accuracy, completeness, and reliability of extracted regulatory data against ground truth and quality benchmarks.
+The Eval node is the fifth and final node in the Agent1 pipeline. It performs comprehensive quality assessment of extracted requirements, detecting failure patterns, computing quality metrics, and classifying issues for downstream decision-making.
 
 ## Table of Contents
 
@@ -12,234 +12,307 @@ The Eval component provides comprehensive evaluation and quality assessment capa
 - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Usage](#usage)
-- [Evaluation Metrics](#evaluation-metrics)
-- [Configuration](#configuration)
+- [Quality Checks](#quality-checks)
+- [Failure Classification](#failure-classification)
 - [Output Format](#output-format)
 - [Next Steps](#next-steps)
 
 ## Purpose
 
-*This component is currently in the planning phase. Content will be added as the component is developed.*
-
-The Eval component will:
-- Assess extraction accuracy against ground truth datasets
-- Calculate precision, recall, and F1 scores
-- Validate data quality metrics
-- Generate evaluation reports
-- Identify areas for pipeline improvement
-- Support A/B testing of different extraction strategies
+The Eval node:
+- Analyzes coverage of chunks that yielded extractions
+- Checks testability of extracted requirements
+- Detects grounding issues and potential hallucinations
+- Identifies duplicate requirements
+- Validates schema compliance
+- Classifies failure patterns and severity
+- Computes overall quality score
+- Generates actionable suggestions
 
 ## Key Features
 
-*To be documented upon implementation*
-
-### Planned Capabilities
-
-- Ground truth comparison
-- Automated quality metrics calculation
-- Benchmark tracking over time
-- Error analysis and categorization
-- Performance regression detection
-- Multi-dimensional evaluation (accuracy, completeness, consistency)
-- Configurable evaluation criteria
+- **Multi-Check Evaluation**: Six independent quality checks
+- **Failure Classification**: Categorizes failure types with severity
+- **Quality Scoring**: Computes overall quality score (0.0-1.0)
+- **Enrichment Validation**: Self-validates Eval/Atomizer enrichments
+- **Actionable Suggestions**: Generates improvement recommendations
+- **Confidence Distribution**: Analyzes confidence score distribution
 
 ## Architecture
 
-*Architecture details will be added during implementation*
-
-### Planned Module Structure
+### Module Structure
 
 ```
-src/eval/  (tentative)
-  ├── __init__.py
-  ├── evaluator.py
-  ├── metrics.py
-  ├── ground_truth.py
-  ├── reporters.py
-  └── models/
-      └── evaluation_results.py
+src/agent1/eval/
+  __init__.py
+  eval_node.py               # Main eval orchestration
+  classifier.py              # Failure classification logic
+  models.py                  # EvalReport and issue models
+
+src/agent1/eval/checks/
+  coverage.py                # Chunk coverage analysis
+  testability.py             # Testability checks
+  grounding.py               # Grounding verification
+  hallucination.py           # Hallucination detection
+  deduplication.py           # Duplicate detection
+  schema_compliance.py       # Schema validation
+```
+
+### Processing Flow
+
+```
+Input State -> Run Quality Checks:
+                - Coverage analysis
+                - Testability check
+                - Grounding check
+                - Hallucination detection
+                - Deduplication check
+                - Schema compliance
+                      |
+                      v
+               Classify Failures:
+               - Determine failure_type
+               - Assign severity
+               - Check if retryable
+                      |
+                      v
+               Generate Report:
+               - Compute quality score
+               - Generate suggestions
+               - Build EvalReport
 ```
 
 ## Usage
 
-*Usage examples will be provided once the component is implemented*
-
-### Placeholder API
+### Programmatic API
 
 ```python
-# Tentative API design (subject to change)
-from src.eval import Evaluator
+from agent1.eval.eval_node import eval_quality
 
-evaluator = Evaluator()
-results = evaluator.evaluate(
-    predictions=extracted_rules,
-    ground_truth=reference_dataset,
-    metrics=["precision", "recall", "f1"]
-)
+# Build state with requirements and metadata
+state = {
+    "requirements": requirements,
+    "extraction_metadata": extraction_metadata,
+    "chunks": chunks,
+    "prompt_versions": prompt_versions,
+}
 
-# Generate report
-report = evaluator.generate_report(results)
+# Run evaluation
+result = eval_quality(state)
+eval_report = result.get("eval_report")
+
+print(f"Quality score: {eval_report['overall_quality_score']:.2%}")
+print(f"Failure type: {eval_report['failure_type']}")
+print(f"Severity: {eval_report['failure_severity']}")
 ```
 
-## Evaluation Metrics
+### In Pipeline Context
 
-*Detailed metrics will be defined during implementation*
+The eval node is automatically called as part of the `atomize` command:
 
-### Planned Metrics
+```bash
+python cli.py atomize --input "document.docx"
+```
 
-#### Accuracy Metrics
-- **Precision**: Proportion of extracted items that are correct
-- **Recall**: Proportion of correct items that were extracted
-- **F1 Score**: Harmonic mean of precision and recall
-- **Exact Match**: Percentage of perfect extractions
+## Quality Checks
 
-#### Quality Metrics
-- **Schema Compliance**: Adherence to expected data structure
-- **Completeness**: Presence of all required fields
-- **Confidence Distribution**: Analysis of confidence scores
-- **Grounding Accuracy**: Verification against source text
+### 1. Coverage Analysis
 
-#### Pipeline Metrics
-- **Processing Time**: End-to-end and per-component timing
-- **Throughput**: Documents/chunks processed per unit time
-- **Error Rate**: Frequency of processing failures
-- **Resource Usage**: Memory and API call consumption
+Analyzes what proportion of chunks yielded extractions:
 
-## Configuration
+```python
+coverage_ratio = chunks_with_extractions / total_chunks
+```
 
-*Configuration options will be documented during development*
+Low coverage may indicate:
+- Document structure not matching expected patterns
+- Chunks containing non-regulatory content
+- Extraction prompt issues
 
-### Expected Configuration Parameters
+### 2. Testability Check
 
-- Ground truth dataset paths
-- Evaluation metric selection
-- Threshold values for pass/fail criteria
-- Report generation options
-- Comparison baselines
+Validates that requirements are testable:
+- Checks for vague language ("appropriate", "reasonable")
+- Verifies presence of measurable criteria
+- Flags requirements without clear pass/fail conditions
+
+### 3. Grounding Check
+
+Verifies requirements are grounded in source text:
+- Checks `grounded_in` field is non-empty
+- Validates grounding text exists in source chunks
+- Flags weak or missing grounding
+
+### 4. Hallucination Detection
+
+Identifies potential hallucinations:
+- Requirements with no source evidence
+- Fabricated numeric values
+- Invented entity references
+
+### 5. Deduplication Check
+
+Detects duplicate or near-duplicate requirements:
+- Semantic similarity analysis
+- ID collision detection
+- Flags potential duplicates for review
+
+### 6. Schema Compliance
+
+Validates requirements against type-specific schemas:
+- Checks required attributes are present
+- Validates attribute types
+- Flags missing or invalid fields
+
+## Failure Classification
+
+The eval node classifies failures into types:
+
+| Failure Type | Description |
+|--------------|-------------|
+| `none` | No significant issues |
+| `coverage` | Low chunk coverage |
+| `grounding` | Grounding issues detected |
+| `hallucination` | Potential hallucinations |
+| `schema` | Schema compliance failures |
+| `testability` | Testability issues |
+| `multi` | Multiple failure types |
+
+### Severity Levels
+
+| Severity | Description |
+|----------|-------------|
+| `low` | Minor issues, acceptable quality |
+| `medium` | Notable issues, review recommended |
+| `high` | Significant issues, quality concerns |
+| `critical` | Major issues, results may be unreliable |
+
+### Retryable Flag
+
+The `is_retryable` flag indicates whether re-running extraction might help:
+- `true`: Issues may be transient (LLM variability)
+- `false`: Issues are structural (document format, prompt design)
 
 ## Output Format
 
-*Output format specifications will be defined during implementation*
-
-### Expected Evaluation Report Structure
+### EvalReport Structure
 
 ```python
-# Tentative structure
 {
-    "evaluation_id": "EVAL_20260213_001",
-    "timestamp": "2026-02-13T17:00:00Z",
-    "dataset": {
-        "name": "FDIC_370_test_set",
-        "documents": 10,
-        "ground_truth_items": 150
+    "total_requirements": int,
+    "total_chunks": int,
+    "coverage_ratio": float,
+    "avg_confidence": float,
+    "confidence_distribution": {
+        "0.90-0.99": int,
+        "0.80-0.89": int,
+        "0.70-0.79": int,
+        "0.60-0.69": int,
+        "0.50-0.59": int
     },
-    "metrics": {
-        "precision": 0.92,
-        "recall": 0.88,
-        "f1_score": 0.90,
-        "exact_match": 0.75
-    },
-    "quality_metrics": {
-        "schema_compliance": 0.98,
-        "completeness": 0.95,
-        "average_confidence": 0.87
-    },
-    "performance": {
-        "total_time_seconds": 120.5,
-        "throughput_docs_per_minute": 5.0
-    },
-    "errors": [
-        {
-            "type": "missing_extraction",
-            "count": 12,
-            "examples": ["RULE_045", "CONTROL_023"]
-        }
-    ],
-    "recommendations": [
-        "Consider adjusting confidence threshold",
-        "Review false negatives in Section 3.2"
-    ]
+    "requirements_by_type": dict[str, int],
+    "testability_issues": list[TestabilityIssue],
+    "grounding_issues": list[GroundingIssue],
+    "hallucination_flags": list[HallucinationFlag],
+    "potential_duplicates": list[PotentialDuplicate],
+    "schema_compliance_issues": list[SchemaComplianceIssue],
+    "enrichment_validation_issues": list[dict],
+    "failure_type": str,
+    "failure_severity": str,
+    "is_retryable": bool,
+    "overall_quality_score": float,
+    "suggestions": list[str]
 }
 ```
+
+### Example Output
+
+```json
+{
+  "eval_report": {
+    "total_requirements": 178,
+    "total_chunks": 150,
+    "coverage_ratio": 0.72,
+    "avg_confidence": 0.68,
+    "confidence_distribution": {
+      "0.90-0.99": 12,
+      "0.80-0.89": 35,
+      "0.70-0.79": 48,
+      "0.60-0.69": 52,
+      "0.50-0.59": 31
+    },
+    "testability_issues": 15,
+    "grounding_issues": 22,
+    "hallucination_flags": 8,
+    "potential_duplicates": 3,
+    "schema_compliance_issues": 45,
+    "failure_type": "multi",
+    "failure_severity": "high",
+    "is_retryable": false,
+    "overall_quality_score": 0.58,
+    "suggestions": [
+      "Review grounding for 22 requirements with weak source evidence",
+      "Address schema compliance issues in 45 requirements",
+      "Consider refining extraction prompt for better testability"
+    ]
+  }
+}
+```
+
+## Enrichment Validation
+
+The eval node performs self-validation of enrichments added by Eval/Atomizer:
+
+### Confidence Integrity Check
+Validates that declared confidence matches computed features:
+```python
+if abs(declared_conf - expected_clamped) > 0.05:
+    issues.append("confidence_integrity")
+```
+
+### Template Error Detection
+Detects template errors like doubled words or empty placeholders.
+
+### Enrichment Grounding Check
+Validates that system mappings have supporting keywords if inferred.
 
 ## Integration Points
 
 ### Input
 
-Receives data from:
-- **[Parse and Chunk Component](Phase1-Parse-and-Chunk.md)**
-- **[Schema Discovery Agent](Phase1-Schema-Discovery-Agent.md)**
-- **[Confidence Scorer](Phase1-Confidence-Scorer.md)**
-- **[Atomizer Agent](Phase1-Atomizer-Agent.md)**
-- Extraction pipeline outputs
+Receives from Node 4 (Atomizer):
+- `requirements`: List of RegulatoryRequirement objects
+- `extraction_metadata`: ExtractionMetadata with stats
+- `chunks`: Original document chunks
+- `prompt_versions`: Tracking of prompt versions
 
 ### Output
 
-Provides evaluation results to:
-- Development team for pipeline improvements
-- Quality assurance processes
-- Performance monitoring dashboards
-- **[Router Component](Phase1-Router.md)** (for quality-based routing)
+Provides to final output:
+- `eval_report`: Comprehensive quality assessment
+- Quality metrics for downstream decisions
 
-## Ground Truth Management
+## Quality Score Calculation
 
-*Ground truth handling will be defined during implementation*
+The overall quality score is computed as a weighted combination:
 
-### Expected Features
+```python
+quality_score = (
+    coverage_weight * coverage_ratio +
+    grounding_weight * grounding_score +
+    schema_weight * schema_compliance_ratio +
+    testability_weight * testability_score
+)
+```
 
-- Ground truth dataset creation tools
-- Annotation format specification
-- Versioning of ground truth datasets
-- Quality control for ground truth data
-- Automated ground truth updates
-
-## Use Cases
-
-### Pipeline Development
-- Measure impact of prompt changes
-- Compare different LLM providers
-- Validate new extraction strategies
-
-### Quality Assurance
-- Continuous validation of production extractions
-- Regression testing after updates
-- Compliance verification
-
-### Performance Monitoring
-- Track metrics over time
-- Identify performance degradation
-- Benchmark against targets
-
-## Development Status
-
-**Current Status**: Not yet implemented
-
-**Planned Timeline**: TBD
-
-**Dependencies**: 
-- Parse and Chunk component (✅ Complete)
-- Schema Discovery Agent (🚧 Planned)
-- Confidence Scorer (🚧 Planned)
-- Atomizer Agent (🚧 Planned)
-
-## Testing Strategy
-
-The Eval component itself will be tested with:
-- Synthetic ground truth datasets
-- Known good/bad extraction examples
-- Metric calculation verification
-- Report generation validation
-
-## Next Steps
-
-This page will be updated with detailed documentation once the Eval component is implemented.
+Scores range from 0.0 (poor) to 1.0 (excellent).
 
 ## Related Documentation
 
 - [Architecture Overview](Architecture.md)
-- [Development Guide](Development-Guide.md#testing)
-- [API Reference](API-Reference.md)
+- [Atomizer Agent](Phase1-Atomizer-Agent.md)
+- [Confidence Gate](Phase1-Confidence-Scorer.md)
 
 ---
 
-**Questions or Feedback?** [Open an issue](https://github.com/sumitasthana/kratos-discover/issues) to discuss the Eval component design.
+**Questions?** [Open an issue](https://github.com/sumitasthana/kratos-discover/issues) for eval discussions.

@@ -1,10 +1,10 @@
-# Phase 1 Component: Atomizer Agent
+# Node 4: Requirement Atomizer Agent
 
-**Status**: 🚧 Planned
+**Status**: Complete
 
 ## Overview
 
-The Atomizer Agent is responsible for breaking down complex, compound rules and regulatory statements into atomic, indivisible units. This ensures that each extracted item represents a single, testable requirement or control.
+The Requirement Atomizer Agent is the fourth node in the Agent1 pipeline. It extracts atomic, testable regulatory requirements from document chunks and GRC components. Each requirement is a single, verifiable obligation with confidence scoring and source grounding.
 
 ## Table of Contents
 
@@ -13,181 +13,283 @@ The Atomizer Agent is responsible for breaking down complex, compound rules and 
 - [Architecture](#architecture)
 - [Usage](#usage)
 - [Configuration](#configuration)
-- [Atomization Strategy](#atomization-strategy)
+- [Rule Types](#rule-types)
 - [Output Format](#output-format)
+- [Confidence Scoring](#confidence-scoring)
 - [Next Steps](#next-steps)
 
 ## Purpose
 
-*This component is currently in the planning phase. Content will be added as the component is developed.*
-
-The Atomizer Agent will:
-- Decompose compound rules into atomic statements
-- Identify and separate multiple requirements within single text blocks
-- Ensure each output represents a single, testable assertion
-- Maintain traceability to source text
-- Preserve relationships between related atomic items
+The Requirement Atomizer:
+- Extracts atomic regulatory requirements from document chunks
+- Links requirements to parent GRC components (policies, risks, controls)
+- Assigns confidence scores based on grounding quality
+- Validates requirements against type-specific attribute schemas
+- Auto-repairs missing required fields when possible
 
 ## Key Features
 
-*To be documented upon implementation*
-
-### Planned Capabilities
-
-- Compound statement detection
-- Logical operator parsing (AND, OR, IF-THEN)
-- Atomic unit extraction
-- Relationship preservation
-- Traceability maintenance
-- Validation of atomicity
+- **Atomic Extraction**: Each requirement is a single, testable obligation
+- **Type-Specific Attributes**: Different rule types have different required/optional fields
+- **Confidence Calibration**: 4-tier confidence scoring (0.50-0.99)
+- **Grounding Verification**: Requirements include verbatim source text
+- **Schema Validation**: Pydantic validation with auto-repair
+- **Batch Processing**: Chunks processed in batches for efficiency
+- **Parent Linking**: Requirements linked to source GRC components
 
 ## Architecture
 
-*Architecture details will be added during implementation*
-
-### Planned Module Structure
+### Module Structure
 
 ```
-src/atomizer/  (tentative)
-  ├── __init__.py
-  ├── atomizer.py
-  ├── decomposer.py
-  ├── relationship_tracker.py
-  └── models/
-      └── atomic_units.py
+src/agent1/nodes/atomizer/
+  __init__.py
+  node.py                    # Main orchestration
+  batch_processor.py         # LLM batch processing
+  response_parser.py         # JSON parsing
+  schema_repair.py           # Auto-repair logic
+  prompt_builder.py          # Prompt construction
+
+src/agent1/models/
+  requirements.py            # RegulatoryRequirement model
+
+src/agent1/prompts/requirement_atomizer/
+  v1.0.yaml                  # Prompt configuration
+```
+
+### Processing Flow
+
+```
+Input State -> Batch Chunks -> For each batch:
+                                - Build prompt with schema guidance
+                                - Call Claude
+                                - Parse JSON response
+                                - Validate requirements
+                                - Auto-repair missing fields
+                                - Score confidence
+                                      |
+                                      v
+                              Aggregate Results:
+                              - requirements[]
+                              - extraction_metadata
+                              - skipped_chunks[]
 ```
 
 ## Usage
 
-*Usage examples will be provided once the component is implemented*
+### CLI Usage
 
-### Placeholder API
+```bash
+# Run full pipeline including atomizer
+python cli.py atomize --input "document.docx"
+
+# Output includes requirements in JSON
+```
+
+### Programmatic API
 
 ```python
-# Tentative API design (subject to change)
-from src.atomizer import AtomizerAgent
+from agent1.nodes.atomizer import RequirementAtomizerNode
 
-atomizer = AtomizerAgent()
-atomic_items = atomizer.atomize(compound_rules)
+# Initialize atomizer
+atomizer = RequirementAtomizerNode()
+
+# Build state with chunks, schema_map, and grc_components
+state = {
+    "chunks": preprocessor_output.chunks,
+    "schema_map": schema_map,
+    "grc_components": grc_components,
+    "extraction_iteration": 1,
+}
+
+# Run atomization
+result = atomizer(state)
+
+requirements = result.get("requirements", [])
+extraction_metadata = result.get("extraction_metadata")
+
+print(f"Extracted: {len(requirements)} requirements")
+print(f"Avg confidence: {extraction_metadata.avg_confidence:.2%}")
 ```
 
 ## Configuration
 
-*Configuration options will be documented during development*
+### Constants
 
-### Expected Configuration Parameters
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `DEFAULT_MODEL` | claude-sonnet-4-20250514 | Claude model for extraction |
+| `MAX_BATCH_CHARS` | 15000 | Maximum characters per batch |
+| `MAX_RETRIES_PER_BATCH` | 3 | Retry attempts per batch |
+| `RETRY_BACKOFF_BASE` | 2.0 | Exponential backoff base |
+| `BATCH_FAILURE_THRESHOLD` | 0.5 | Max batch failure ratio before abort |
 
-- Atomization granularity level
-- Relationship preservation strategy
-- Compound detection rules
-- Validation thresholds
+## Rule Types
 
-## Atomization Strategy
+The atomizer extracts requirements of the following types:
 
-*Detailed atomization methodology will be defined during implementation*
+| Rule Type | Code | Description |
+|-----------|------|-------------|
+| `data_quality_threshold` | DQ | Data quality metrics and thresholds |
+| `ownership_category` | OWN | Ownership classification requirements |
+| `beneficial_ownership_threshold` | BOT | Beneficial ownership thresholds |
+| `documentation_requirement` | DOC | Documentation requirements |
+| `update_requirement` | UPD | Update/change requirements |
+| `update_timeline` | TL | Timeline requirements |
 
-### Examples of Atomization
+### Type-Specific Attributes
 
-#### Before Atomization
-```
-"All financial institutions must maintain adequate capital reserves 
-AND submit quarterly reports to the regulatory authority."
-```
+Each rule type has required and optional attributes:
 
-#### After Atomization
-```
-Atomic Rule 1: "All financial institutions must maintain adequate capital reserves"
-Atomic Rule 2: "All financial institutions must submit quarterly reports to the regulatory authority"
-Relationship: Rule 1 AND Rule 2 (both required)
-```
+**data_quality_threshold**:
+- Required: `metric`, `threshold_value`, `threshold_direction`
+- Optional: `threshold_unit`, `consequence`
 
-### Planned Decomposition Patterns
+**ownership_category**:
+- Required: `ownership_type`, `required_data_elements`
+- Optional: `insurance_coverage`, `cardinality`
 
-1. **Conjunction Splitting**: Breaking AND clauses
-2. **Conditional Decomposition**: Separating IF-THEN statements
-3. **List Expansion**: Expanding enumerated requirements
-4. **Nested Rule Extraction**: Identifying embedded requirements
+**documentation_requirement**:
+- Required: `applies_to`, `requirement`
+- Optional: `consequence`
+
+**update_timeline**:
+- Required: `applies_to`, `threshold_value`, `threshold_unit`
+- Optional: `consequence`
 
 ## Output Format
 
-*Output format specifications will be defined during implementation*
-
-### Expected Output Structure
+### RegulatoryRequirement Model
 
 ```python
-# Tentative structure
+class RegulatoryRequirement(BaseModel):
+    requirement_id: str       # R-{TYPE_CODE}-{HASH6}
+    rule_type: RuleType       # Enum of rule types
+    rule_description: str     # Plain-English testable statement
+    grounded_in: str          # Verbatim source text
+    confidence: float         # 0.50-0.99
+    attributes: dict          # Type-specific fields
+    metadata: RuleMetadata    # Source tracking
+    parent_component_id: str  # Optional link to GRC component
+```
+
+### Example Output
+
+```json
 {
-    "atomic_id": "ATOM_001",
-    "parent_id": "RULE_001",
-    "content": "Single atomic requirement",
-    "type": "atomic_rule",
-    "relationships": [
-        {
-            "related_to": "ATOM_002",
-            "relationship_type": "AND"
-        }
-    ],
-    "source_reference": {
-        "original_id": "RULE_001",
-        "text_span": [0, 50]
-    },
-    "metadata": {}
+  "requirements": [
+    {
+      "requirement_id": "R-DQ-a1b2c3",
+      "rule_type": "data_quality_threshold",
+      "rule_description": "Customer account data must achieve 99% accuracy rate.",
+      "grounded_in": "Data quality standards require 99% accuracy for all customer account records.",
+      "confidence": 0.87,
+      "attributes": {
+        "metric": "accuracy",
+        "threshold_value": 99,
+        "threshold_direction": "minimum"
+      },
+      "metadata": {
+        "source_chunk_id": "chunk_0042",
+        "source_location": "Table 3, Row 5",
+        "schema_version": "schema-a1b2c3",
+        "prompt_version": "v1.0",
+        "extraction_iteration": 1
+      },
+      "parent_component_id": "P-001"
+    }
+  ],
+  "extraction_metadata": {
+    "total_chunks_processed": 150,
+    "total_requirements_extracted": 178,
+    "avg_confidence": 0.72,
+    "rule_type_distribution": {
+      "data_quality_threshold": 45,
+      "update_timeline": 38,
+      "documentation_requirement": 32
+    }
+  }
 }
 ```
+
+### ExtractionMetadata
+
+```python
+class ExtractionMetadata(BaseModel):
+    total_chunks_processed: int
+    total_requirements_extracted: int
+    chunks_with_zero_extractions: list[str]
+    skipped_chunks: list[ChunkSkipRecord]
+    avg_confidence: float
+    rule_type_distribution: dict[str, int]
+    extraction_iteration: int
+    prompt_version: str
+    model_used: str
+    total_llm_calls: int
+    total_input_tokens: int
+    total_output_tokens: int
+```
+
+## Confidence Scoring
+
+Requirements are assigned confidence scores in a 4-tier system:
+
+| Tier | Range | Interpretation |
+|------|-------|----------------|
+| High | 0.90-0.99 | Exact match to source text |
+| Good | 0.80-0.89 | Minor inference required |
+| Moderate | 0.70-0.79 | Moderate inference |
+| Low | 0.50-0.69 | Weak grounding, needs review |
+
+Confidence is clamped to the 0.50-0.99 range. Values below 0.50 are raised to 0.50; values above 0.99 are capped at 0.99.
+
+### Grounding Classification
+
+Each requirement includes a grounding classification:
+- **EXACT**: Direct quote from source
+- **PARAPHRASE**: Rephrased but semantically equivalent
+- **INFERENCE**: Derived from context
+
+## Chunk Skip Tracking
+
+Chunks that yield zero extractions are tracked with reasons:
+
+| Skip Reason | Description |
+|-------------|-------------|
+| `no_extractable_content` | Chunk has no regulatory obligations |
+| `parse_error` | LLM response parsing failed |
+| `below_threshold` | All extractions below confidence threshold |
+| `llm_error` | LLM call failed |
+| `empty_response` | LLM returned empty/null response |
 
 ## Integration Points
 
 ### Input
 
-Receives data from:
-- **[Schema Discovery Agent](Phase1-Schema-Discovery-Agent.md)**
-- Existing extraction pipeline (RuleAgent)
+Receives from Node 3.5 (GRC Extractor):
+- `chunks`: List of ContentChunk objects
+- `schema_map`: SchemaMap with discovered entities
+- `grc_components`: Extracted GRC components
+- `component_index`: Component lookup index
 
 ### Output
 
-Provides atomized data to:
-- **[Confidence Scorer](Phase1-Confidence-Scorer.md)**
-- **[Eval Component](Phase1-Eval.md)**
-
-## Benefits of Atomization
-
-### Why Atomize?
-
-1. **Testability**: Each atomic unit can be independently verified
-2. **Traceability**: Clear mapping to source requirements
-3. **Reusability**: Atomic units can be composed into different rule sets
-4. **Clarity**: Eliminates ambiguity in compound statements
-5. **Compliance**: Easier to map to specific regulatory controls
-
-## Development Status
-
-**Current Status**: Not yet implemented
-
-**Planned Timeline**: TBD
-
-**Dependencies**: 
-- Parse and Chunk component (✅ Complete)
-- Schema Discovery Agent (🚧 Planned)
-
-## Validation
-
-The Atomizer Agent will include validation to ensure:
-- Each atomic unit is truly indivisible
-- No information is lost during decomposition
-- Relationships are accurately preserved
-- Source traceability is maintained
+Provides to Node 5 (Eval):
+- `requirements`: List of RegulatoryRequirement objects
+- `extraction_metadata`: ExtractionMetadata with stats
+- `prompt_versions`: Tracking of prompt versions used
 
 ## Next Steps
 
-This page will be updated with detailed documentation once the Atomizer Agent is implemented.
+After atomization, the pipeline proceeds to:
+1. **[Eval](Phase1-Eval.md)** - Quality assessment and failure classification
 
 ## Related Documentation
 
 - [Architecture Overview](Architecture.md)
-- [Schema Discovery Agent](Phase1-Schema-Discovery-Agent.md)
-- [Confidence Scorer](Phase1-Confidence-Scorer.md)
-- [Development Guide](Development-Guide.md)
+- [GRC Extractor](Phase1-GRC-Extractor.md)
+- [Eval](Phase1-Eval.md)
 
 ---
 
-**Questions or Feedback?** [Open an issue](https://github.com/sumitasthana/kratos-discover/issues) to discuss the Atomizer Agent design.
+**Questions?** [Open an issue](https://github.com/sumitasthana/kratos-discover/issues) for atomizer discussions.
