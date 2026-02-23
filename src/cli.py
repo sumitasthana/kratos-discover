@@ -12,12 +12,12 @@ from typing import Any, Optional
 
 from dotenv import load_dotenv
 
-from agent1.nodes.preprocessor import parse_and_chunk
-from agent1.nodes.schema_discovery import schema_discovery_agent
-from agent1.nodes.confidence_gate import check_confidence
-from agent1.nodes.grc_extractor import GRCComponentExtractorNode
-from agent1.nodes.atomizer import RequirementAtomizerNode
-from agent1.eval.eval_node import eval_quality
+from nodes.preprocessor import parse_and_chunk
+from nodes.schema_discovery import schema_discovery_agent
+from nodes.confidence_gate import check_confidence
+from nodes.grc_extractor import GRCComponentExtractorNode
+from nodes.atomizer import RequirementAtomizerNode
+from eval.eval_node import eval_quality
 
 
 logger = logging.getLogger(__name__)

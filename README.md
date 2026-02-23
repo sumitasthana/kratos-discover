@@ -1,61 +1,63 @@
 # kratos-discover
 
-Production-grade Rule Agent built with LangGraph for automated extraction and analysis of regulatory compliance documents.
+Regulatory requirement extraction system for automated processing of compliance documents.
 
 ## Overview
 
-Kratos-discover is an intelligent document processing system designed to extract structured regulatory rules, policies, risks, and controls from compliance documents. Built on LangGraph and LangChain, it leverages large language models to transform unstructured regulatory text into actionable, machine-readable data.
-
-The system currently supports processing FDIC 370 GRC Library documents and provides a robust pipeline for segmentation, extraction, validation, deduplication, and grounding.
+Kratos-Discover is an LLM-powered document processing system that extracts structured regulatory requirements, policies, risks, and controls from compliance documents such as FDIC Part 370 IT Controls. The system uses a 5-node pipeline architecture with confidence scoring, schema validation, and quality evaluation.
 
 ## The Problem It Solves
 
-This agent automates the extraction of structured regulatory compliance data from unstructured documents. Given a regulatory document (such as FDIC Part 370 or internal GRC policy libraries), the agent:
+This system automates the extraction of structured regulatory compliance data from DOCX documents. Given a regulatory document, the pipeline:
 
-1. **Segments** the document into logical sections for processing
-2. **Extracts** structured rules, policies, risks, and controls using LLM-powered analysis
-3. **Validates** the extracted data against predefined schemas to ensure correctness
-4. **Deduplicates** similar entries to eliminate redundancy
-5. **Grounds** each extracted item by verifying it against the source text to prevent hallucinations
-6. **Outputs** machine-readable JSON with complete metadata, ready for import into GRC platforms or further processing
+1. **Parses** the document into deterministic chunks (tables, prose, lists)
+2. **Discovers** document schema structure using LLM analysis
+3. **Gates** processing based on confidence thresholds
+4. **Extracts** GRC components (policies, risks, controls) from tables
+5. **Atomizes** complex text into atomic regulatory requirements
+6. **Evaluates** extraction quality with hallucination detection and grounding verification
 
-The agent transforms unstructured regulatory text into structured, validated data that can be directly consumed by compliance management systems.
+The system transforms unstructured regulatory text into structured, validated data with confidence scores and quality metrics.
 
 ## Key Features
 
-- **Automated Document Segmentation**: Intelligently splits regulatory documents into extractable sections
-- **Multi-Mode Extraction**: Supports both rule extraction and GRC component (policies, risks, controls) extraction
-- **LLM Provider Flexibility**: Compatible with OpenAI and Anthropic Claude models
-- **Structured Output**: Uses schema-based structured output when supported by the LLM, with fallback to JSON parsing
-- **Validation Pipeline**: Multi-stage validation, deduplication, and parsing to ensure data quality
-- **Strict Grounding**: Enforces verification of extracted items against source text to prevent hallucinations
-- **Versioned Prompts**: Supports prompt versioning for reproducibility and iterative improvement
-- **Debug Mode**: Comprehensive debugging capabilities with intermediate artifact dumps
-- **Flexible I/O**: Supports multiple document formats (DOCX, PDF, HTML) with configurable output options
+- **Deterministic Preprocessing**: Parse DOCX into structured chunks with consistent IDs
+- **Schema Discovery**: Automatically infer document structure using stratified sampling
+- **Confidence Scoring**: Multi-dimensional confidence with grounding verification
+- **GRC Extraction**: Extract policies, risks, and controls from Word tables
+- **Requirement Atomization**: Break complex text into atomic, testable requirements
+- **Quality Evaluation**: Comprehensive checks including hallucination detection, testability, and schema compliance
+- **Grounding Classification**: EXACT/PARAPHRASE/INFERENCE classification for each extraction
+- **Auto-Repair**: Automatic schema violation repair attempts
 
 ## Architecture
 
-The system implements a multi-node LangGraph pipeline:
+The system implements a 5-node pipeline:
 
-1. **Segmentation Node**: Divides the source document into logical sections
-2. **Extraction Node**: Uses LLM to extract rules or GRC components with structured schemas
-3. **Validation Node**: Parses and validates extracted data against defined schemas
-4. **Deduplication Node**: Removes duplicate entries based on content similarity
-5. **Grounding Node**: Verifies each extracted item against source text and filters ungrounded items
+| Node | Name | Description |
+|------|------|-------------|
+| 1 | Preprocessor | Parse DOCX into deterministic chunks |
+| 2 | Schema Discovery | Infer document structure using Claude |
+| 3 | Confidence Gate | Validate schema confidence meets thresholds |
+| 3.5 | GRC Extractor | Extract Policy/Risk/Control components from tables |
+| 4 | Atomizer | Extract atomic regulatory requirements |
+| 5 | Eval | Quality assessment and failure classification |
 
 ### Core Components
 
-- **RuleAgent**: Main orchestrator implementing the LangGraph pipeline
-- **PromptRegistry**: Manages versioned prompt specifications
-- **CLI**: Command-line interface for batch processing
-- **Data Models**: Pydantic models for Rules, Policies, Risks, and Controls
+- **CLI**: Command-line interface (`cli.py`)
+- **Nodes**: Pipeline processing nodes (`nodes/`)
+- **Models**: Pydantic data models (`models/`)
+- **Scoring**: Confidence scoring system (`scoring/`)
+- **Eval**: Quality evaluation checks (`eval/`)
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - Virtual environment (recommended)
+- Anthropic API key
 
 ### Setup Steps
 
@@ -95,143 +97,115 @@ pip install -r requirements.txt
 cp config/.env.example .env
 ```
 
-Edit `.env` to add your API keys:
+Edit `.env` to add your API key:
 ```
 ANTHROPIC_API_KEY=your_anthropic_key
-OPENAI_API_KEY=your_openai_key
-CLAUDE_MODEL=claude-opus-4-20250805
-OPENAI_MODEL=gpt-4o-mini
-FDIC_370_PATH=data/FDIC_370_GRC_Library_National_Bank.docx
 ```
 
 ## Usage
 
 ### Data Preparation
 
-Place your FDIC 370 source document in the `data/` directory:
+Place your source document in the `data/` directory:
 ```
-data/FDIC_370_GRC_Library_National_Bank.docx
+data/FDIC_Part370_IT_Controls.docx
 ```
 
 Note: The `data/` directory is gitignored to prevent accidental commits of sensitive documents.
 
 ### Command-Line Interface
 
-#### Basic Rule Extraction
+#### Full Pipeline (Recommended)
 
-Extract rules using OpenAI:
+Run the complete extraction pipeline:
 ```bash
-python -m src.cli --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
+python cli.py atomize --input data/document.docx
 ```
 
-Extract rules using Anthropic Claude:
+With custom output path:
 ```bash
-python -m src.cli --provider anthropic --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
+python cli.py atomize --input data/document.docx --output results.json
 ```
 
-Alternatively, if you installed the package:
+#### Preprocessing Only
+
+Parse document into chunks without LLM processing:
 ```bash
-kratos-discover --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output results.json
+python cli.py preprocess --input data/document.docx
 ```
 
-#### GRC Component Extraction
+#### Schema Discovery
 
-Extract policies, risks, and controls:
+Run preprocessing and schema discovery:
 ```bash
-python -m src.cli --mode grc_components --provider openai --input data/FDIC_370_GRC_Library_National_Bank.docx --output grc_results.json
-```
-
-#### Advanced Options
-
-Enable debug mode with intermediate outputs:
-```bash
-python -m src.cli --provider openai --debug --dump-debug --output results.json
-```
-
-Override the active prompt version:
-```bash
-python -m src.cli --provider openai --prompt-version v1.2 --output results.json
-```
-
-Specify a custom output directory:
-```bash
-python -m src.cli --provider openai --output-dir ./my_outputs
-```
-
-Adjust logging level:
-```bash
-python -m src.cli --provider openai --log-level DEBUG
+python cli.py discover-schema --input data/document.docx
 ```
 
 ### Programmatic API
 
 ```python
-import os
 from pathlib import Path
-from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI
-from src.rule_agent import RuleAgent
-from src.prompt_registry import PromptRegistry
+from nodes.preprocessor import parse_and_chunk
+from nodes.schema_discovery import schema_discovery_agent
+from nodes.confidence_gate import check_confidence
+from nodes.grc_extractor import GRCComponentExtractorNode
+from nodes.atomizer import RequirementAtomizerNode
+from eval.eval_node import eval_quality
 
-# Initialize prompt registry
-registry = PromptRegistry(base_dir=Path("."))
-
-# Configure LLM (choose one)
-# Option A: Anthropic Claude
-llm = ChatAnthropic(
-    model=os.getenv("CLAUDE_MODEL", "claude-opus-4-20250805"),
-    max_tokens=3000,
-    temperature=0
+# Node 1: Parse document
+preprocessor_output = parse_and_chunk(
+    file_path=Path("data/document.docx"),
+    file_type="docx",
+    max_chunk_chars=3000,
+    min_chunk_chars=50,
 )
 
-# Option B: OpenAI
-# llm = ChatOpenAI(
-#     model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-#     temperature=0
-# )
+# Build state for pipeline
+state = {
+    "chunks": preprocessor_output.chunks,
+    "preprocessor_stats": preprocessor_output.document_stats,
+}
 
-# Create agent instance
-agent = RuleAgent(registry=registry, llm=llm)
+# Node 2: Schema Discovery
+schema_result = schema_discovery_agent(state)
+state["schema_map"] = schema_result["schema_map"]
 
-# Extract rules
-rules = agent.extract_rules(document_path=os.getenv("FDIC_370_PATH"))
-print(f"Extracted {len(rules)} rules")
+# Node 3: Confidence Gate
+gate_result = check_confidence(state)
+print(f"Gate decision: {gate_result.decision}")
 
-# Extract GRC components
-components = agent.extract_grc_components(document_path=os.getenv("FDIC_370_PATH"))
-print(f"Policies: {len(components['policies'])}")
-print(f"Risks: {len(components['risks'])}")
-print(f"Controls: {len(components['controls'])}")
+# Node 3.5: GRC Extraction
+grc_extractor = GRCComponentExtractorNode()
+grc_result = grc_extractor(state)
+state.update(grc_result)
+
+# Node 4: Atomizer
+atomizer = RequirementAtomizerNode()
+atomizer_result = atomizer(state)
+state.update(atomizer_result)
+
+# Node 5: Eval
+eval_result = eval_quality(state)
+print(f"Quality score: {eval_result['eval_report']['overall_quality_score']}")
 ```
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ANTHROPIC_API_KEY` | API key for Anthropic Claude | Required for Anthropic |
-| `OPENAI_API_KEY` | API key for OpenAI | Required for OpenAI |
-| `CLAUDE_MODEL` | Claude model identifier | `claude-opus-4-20250805` |
-| `OPENAI_MODEL` | OpenAI model identifier | `gpt-4o-mini` |
-| `FDIC_370_PATH` | Path to FDIC 370 document | `data/FDIC_370_GRC_Library_National_Bank.docx` |
-| `LLM_PROVIDER` | Default LLM provider | `openai` |
-| `RULE_AGENT_MODE` | Default extraction mode | `rules` |
-| `RULE_AGENT_OUTPUT_DIR` | Default output directory | `outputs` |
-| `RULE_AGENT_LOG_LEVEL` | Logging verbosity | `INFO` |
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `ANTHROPIC_API_KEY` | API key for Anthropic Claude | Yes |
 
-### Prompt Versioning
+### Gate Thresholds
 
-Prompt specifications are stored in `prompts/` with version control:
+Confidence gate thresholds are configured in `src/config/gate_config.yaml`:
 
-- `prompts/registry.yaml`: Defines active prompt versions
-- `prompts/rule_extraction/v1.0.yaml`: Rule extraction prompt v1.0
-- `prompts/rule_extraction/v1.1.yaml`: Rule extraction prompt v1.1
-- `prompts/rule_extraction/v1.2.yaml`: Rule extraction prompt v1.2
-
-To switch prompt versions, either:
-1. Edit `prompts/registry.yaml` to change the active version
-2. Use the `--prompt-version` CLI flag to override at runtime
+```yaml
+auto_accept: 0.85      # Auto-accept above this
+human_review: 0.70     # Human review between this and auto_accept
+auto_reject: 0.50      # Auto-reject below this
+```
 
 ## Data Models
 
@@ -284,165 +258,83 @@ pytest tests/test_prompt_registry.py
 pytest tests/test_cli.py
 ```
 
-## Agent1 Deterministic Preprocessor (DOCX)
-
-This repository now includes a deterministic (no-LLM) preprocessor intended to be used as the first node of a pipeline. Its job is to parse a `.docx` file, detect basic structure (headings, prose blocks, lists, and tables), and emit clean, bounded text chunks.
-
-### Key Properties
-
-- Deterministic parsing: same input file produces the same chunk IDs.
-- No LLM calls.
-- Preserves table structure as `table_data` (rows x columns).
-- Light whitespace normalization only:
-  - trims trailing spaces per line
-  - collapses repeated blank lines
-
-### Current Support
-
-- Supported: `.docx`
-- Placeholders only: `.xlsx`, `.csv` (raise `NotImplementedError`)
-
-### Package Layout
-
-```
-src/agent1/
-  __init__.py
-  exceptions.py
-  models/
-    __init__.py
-    input.py
-    chunks.py
-  nodes/
-    __init__.py
-    preprocessor.py
-  parsers/
-    __init__.py
-    docx_parser.py
-    xlsx_parser.py  # placeholder
-    csv_parser.py   # placeholder
-  utils/
-    __init__.py
-    chunking.py
-```
-
-### Usage (Programmatic)
-
-```python
-from pathlib import Path
-from src.agent1.nodes.preprocessor import parse_and_chunk
-
-out = parse_and_chunk(
-    file_path=Path("data/FDIC_370_GRC_Library_National_Bank.docx"),
-    file_type="docx",
-    max_chunk_chars=3000,
-    min_chunk_chars=50,
-)
-
-print(out.total_chunks)
-print(out.document_stats)
-print(out.chunks[0].chunk_type, out.chunks[0].chunk_id)
-```
-
-### Logging
-
-Agent1 uses `structlog`. You will see structured events such as:
-
-- `parse_started` (file path, file type)
-- `parse_completed` (chunk counts, total characters)
-- `empty_chunk_skipped` (chunks dropped below `min_chunk_chars`)
-- `chunk_parse_failed` (non-fatal per-block parsing failures)
-
-### Tests
-
-Agent1 tests generate `.docx` fixtures at runtime (no committed binary fixtures):
-
-```bash
-pytest tests/test_agent1_preprocessor.py
-```
-
-### Project Structure
+## Project Structure
 
 ```
 kratos-discover/
+├── cli.py                      # CLI wrapper
 ├── README.md                   # Project documentation
 ├── pyproject.toml              # Python package configuration
-├── setup.py                    # Package setup script
 ├── requirements.txt            # Python dependencies
-├── Dockerfile                  # Docker container definition
-├── docker-compose.yml          # Docker Compose configuration
-├── .gitignore                  # Git ignore rules
-├── .dockerignore               # Docker ignore rules
-├── config/
-│   ├── .env.example            # Environment variable template
-│   └── rule_attributes_schema.yaml
-├── prompts/
-│   ├── registry.yaml           # Active prompt versions
-│   └── rule_extraction/        # Versioned prompt specs
-│       ├── v1.0.yaml
-│       ├── v1.1.yaml
-│       └── v1.2.yaml
-├── src/
-│   ├── cli.py                  # Command-line interface
-│   ├── rule_agent.py           # Main RuleAgent implementation
-│   ├── prompt_registry.py      # Prompt version management
-│   └── agent1/                 # Deterministic preprocessor module
-│       ├── __init__.py
-│       ├── exceptions.py
-│       ├── models/             # Data models
-│       ├── nodes/              # Processing nodes
-│       ├── parsers/            # Document parsers
-│       └── utils/              # Utility functions
-├── tests/
-│   ├── conftest.py
-│   ├── test_cli.py
-│   ├── test_rule_agent.py
-│   ├── test_prompt_registry.py
-│   └── test_agent1_preprocessor.py
-├── wiki/                       # Documentation wiki
-│   ├── Home.md
-│   ├── Installation-Guide.md
-│   ├── Usage-Guide.md
-│   ├── Configuration.md
-│   ├── Architecture.md
-│   ├── API-Reference.md
-│   ├── Development-Guide.md
-│   ├── Deployment-Guide.md
-│   └── Troubleshooting.md
+│
+├── src/                        # Source code
+│   ├── cli.py                  # Main CLI implementation
+│   ├── exceptions.py           # Custom exceptions
+│   │
+│   ├── nodes/                  # Pipeline nodes
+│   │   ├── preprocessor.py    # Node 1: Parse & Chunk
+│   │   ├── schema_discovery.py # Node 2: Schema Discovery
+│   │   ├── confidence_gate.py # Node 3: Confidence Gate
+│   │   ├── grc_extractor.py   # Node 3.5: GRC Extraction
+│   │   └── atomizer/          # Node 4: Atomizer
+│   │
+│   ├── eval/                   # Node 5: Quality Evaluation
+│   │   ├── eval_node.py
+│   │   ├── classifier.py
+│   │   └── checks/            # Individual quality checks
+│   │
+│   ├── models/                 # Data models
+│   │   ├── chunks.py
+│   │   ├── requirements.py
+│   │   ├── grc_components.py
+│   │   ├── schema_map.py
+│   │   └── state.py
+│   │
+│   ├── scoring/                # Confidence scoring
+│   │   ├── confidence_scorer.py
+│   │   ├── grounding.py
+│   │   └── features.py
+│   │
+│   ├── parsers/                # Document parsers
+│   ├── prompts/                # LLM prompt templates
+│   ├── config/                 # Configuration files
+│   ├── cache/                  # Caching utilities
+│   └── utils/                  # Utility functions
+│
+├── tests/                      # Test suite
+├── wiki/                       # Documentation
+├── dashboard/                  # React compliance dashboard
 ├── data/                       # Input documents (gitignored)
 └── outputs/                    # Extraction results (gitignored)
 ```
 
-### Debug Mode
-
-Debug mode provides visibility into the extraction pipeline:
-
-```bash
-python -m src.cli --debug --dump-debug --provider openai
-```
-
-This creates a timestamped debug directory containing:
-- `raw_rules.json`: Initial LLM extraction output
-- `validated_rules.json`: Post-validation results
-- `deduped_rules.json`: After deduplication
-
 ## Quality Assurance
 
-### Strict Grounding
+### Confidence Scoring
 
-The grounding node implements a verification step that:
-- Compares extracted content against source section text
-- Calculates grounding scores
-- Filters out items that cannot be verified in the source
-- Prevents LLM hallucinations and ensures accuracy
+Multi-dimensional confidence scoring with features:
+- **Grounding Match**: Jaccard similarity with source text
+- **Completeness**: Required field coverage
+- **Quantification**: Presence of measurable values
+- **Schema Compliance**: Schema validation status
+- **Coherence**: Internal consistency
+- **Domain Signals**: Domain-specific indicators
 
-### Validation Pipeline
+### Grounding Classification
 
-Multi-stage validation ensures data quality:
-1. Schema validation using Pydantic models
-2. Required field verification
-3. Data type and constraint checking
-4. Deduplication based on content similarity
-5. Source text verification
+Each extraction is classified:
+- **EXACT**: Direct quote from source (Jaccard > 0.70)
+- **PARAPHRASE**: Rephrased content (Jaccard 0.30-0.70)
+- **INFERENCE**: Inferred content (Jaccard < 0.30) - requires human review
+
+### Quality Evaluation
+
+The eval node performs comprehensive checks:
+- Testability assessment
+- Hallucination detection
+- Deduplication analysis
+- Schema compliance verification
+- Coverage analysis
 
 ## Troubleshooting
 
@@ -450,92 +342,52 @@ Multi-stage validation ensures data quality:
 
 **Import Errors**: Ensure virtual environment is activated and dependencies are installed
 ```bash
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+.venv\Scripts\Activate.ps1  # Windows
+source .venv/bin/activate   # Unix/Mac
 pip install -r requirements.txt
 ```
 
-**API Key Errors**: Verify environment variables are set correctly
+**API Key Errors**: Verify environment variable is set
 ```bash
-echo $OPENAI_API_KEY  # or echo %OPENAI_API_KEY% on Windows
+echo $ANTHROPIC_API_KEY
 ```
 
-**File Not Found**: Check that input document path is correct and file exists
+**File Not Found**: Check that input document path is correct
 ```bash
-ls -la data/FDIC_370_GRC_Library_National_Bank.docx
+ls data/
 ```
-
-**Model Timeout**: For large documents, consider using debug mode to process incrementally
 
 ### Logging
 
-Increase log verbosity for troubleshooting:
-```bash
-python -m src.cli --log-level DEBUG
-```
-
-## Docker Deployment
-
-Kratos-Discover includes Docker support for easy deployment.
-
-### Quick Start with Docker
-
-```bash
-# Build the image
-docker build -t kratos-discover .
-
-# Run with environment file
-docker run --rm \
-  --env-file .env \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/outputs:/app/outputs \
-  kratos-discover \
-  --provider openai --input data/document.docx
-```
-
-### Using Docker Compose
-
-```bash
-# Start services
-docker-compose up
-
-# Run extraction
-docker-compose run kratos-discover \
-  --provider openai --input data/document.docx
-```
-
-For detailed deployment instructions, see the [Deployment Guide](wiki/Deployment-Guide.md).
+The system uses `structlog` for structured logging. Key events:
+- `parse_started`: Document parsing begins
+- `parse_completed`: Chunk counts and statistics
+- `schema_discovery_complete`: Schema inference results
+- `gate_decision`: Accept/review/reject decision
+- `atomizer_complete`: Extraction statistics
 
 ## Documentation
 
 Comprehensive documentation is available in the [wiki](wiki/) directory:
 
-- **[Installation Guide](wiki/Installation-Guide.md)** - Setup and installation
+- **[Home](wiki/Home.md)** - Overview and quick start
+- **[Architecture](wiki/Architecture.md)** - System design and folder structure
 - **[Usage Guide](wiki/Usage-Guide.md)** - CLI and API usage
-- **[Configuration](wiki/Configuration.md)** - Environment variables and settings
-- **[Architecture](wiki/Architecture.md)** - System design and components
-- **[API Reference](wiki/API-Reference.md)** - Programmatic API documentation
-- **[Development Guide](wiki/Development-Guide.md)** - Contributing and development
-- **[Deployment Guide](wiki/Deployment-Guide.md)** - Docker and production deployment
-- **[Troubleshooting](wiki/Troubleshooting.md)** - Common issues and solutions
-
-## Contributing
-
-Contributions are welcome. Please ensure:
-- Code follows existing style conventions
-- Tests pass with `pytest`
-- New features include appropriate test coverage
-- Documentation is updated for new functionality
-
-See the [Development Guide](wiki/Development-Guide.md) for detailed contribution guidelines.
+- **[Phase1-Parse-and-Chunk](wiki/Phase1-Parse-and-Chunk.md)** - Preprocessor node
+- **[Phase1-Schema-Discovery-Agent](wiki/Phase1-Schema-Discovery-Agent.md)** - Schema discovery
+- **[Phase1-Confidence-Scorer](wiki/Phase1-Confidence-Scorer.md)** - Confidence gate
+- **[Phase1-GRC-Extractor](wiki/Phase1-GRC-Extractor.md)** - GRC extraction
+- **[Phase1-Atomizer-Agent](wiki/Phase1-Atomizer-Agent.md)** - Requirement atomization
+- **[Phase1-Eval](wiki/Phase1-Eval.md)** - Quality evaluation
 
 ## License
 
 This project is provided as-is for regulatory compliance document processing.
 
-## Acknowledgments
+## Technology Stack
 
-Built with:
-- LangChain: Framework for LLM applications
-- LangGraph: Graph-based workflow orchestration
-- Pydantic: Data validation and schema management
-- OpenAI and Anthropic: LLM providers
+- **Python 3.11+**: Primary language
+- **Pydantic**: Data validation
+- **structlog**: Structured logging
+- **Anthropic Claude**: LLM provider
+- **python-docx**: Document parsing
