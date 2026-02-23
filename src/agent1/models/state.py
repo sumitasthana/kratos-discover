@@ -7,6 +7,7 @@ from agent1.models.schema_map import SchemaMap
 
 if TYPE_CHECKING:
     from agent1.models.requirements import RegulatoryRequirement, ExtractionMetadata
+    from agent1.models.grc_components import GRCComponentsResponse
 
 
 class Phase1State(TypedDict, total=False):
@@ -24,3 +25,5 @@ class Phase1State(TypedDict, total=False):
     prompt_versions: dict[str, str]
     extraction_iteration: int
     errors: list[str]
+    grc_components: "GRCComponentsResponse | None"
+    component_index: dict[str, str] | None  # maps source_chunk_id → component_id

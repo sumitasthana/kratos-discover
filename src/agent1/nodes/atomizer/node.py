@@ -55,6 +55,7 @@ class RequirementAtomizerNode:
         chunks = state.get("chunks", [])
         schema_map = state.get("schema_map")
         extraction_iteration = state.get("extraction_iteration", 1)
+        component_index = state.get("component_index") or {}
 
         if not chunks:
             logger.warning("atomizer_no_chunks")
@@ -143,6 +144,13 @@ class RequirementAtomizerNode:
 
         # Deduplicate requirements
         all_requirements = self.response_parser.deduplicate_requirements(all_requirements)
+
+        # Link requirements to parent GRC components
+        for req in all_requirements:
+            source_chunk_id = req.metadata.source_chunk_id
+            parent_id = component_index.get(source_chunk_id)
+            if parent_id:
+                req.parent_component_id = parent_id
 
         # Validate attributes and adjust confidence
         validated_requirements = self._validate_and_adjust(all_requirements)

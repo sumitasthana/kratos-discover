@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from agent1.nodes.preprocessor import parse_and_chunk
 from agent1.nodes.schema_discovery import schema_discovery_agent
 from agent1.nodes.confidence_gate import check_confidence
+from agent1.nodes.grc_extractor import GRCComponentExtractorNode
 from agent1.nodes.atomizer import RequirementAtomizerNode
 from agent1.eval.eval_node import eval_quality
 
@@ -314,11 +315,13 @@ def run_atomizer(
         out_dir_path.mkdir(parents=True, exist_ok=True)
         output_file = out_dir_path / f"requirements_{input_stem}_{run_id}.json"
 
-    logger.info("[plan] Requirement Atomizer Pipeline (Nodes 1-4)")
+    logger.info("[plan] Requirement Atomizer Pipeline (Nodes 1-5)")
     logger.info("[plan] - Node 1: Parse DOCX into chunks")
     logger.info("[plan] - Node 2: Schema Discovery")
     logger.info("[plan] - Node 3: Confidence Gate")
+    logger.info("[plan] - Node 3.5: GRC Component Extraction")
     logger.info("[plan] - Node 4: Requirement Atomizer")
+    logger.info("[plan] - Node 5: Eval Quality")
     logger.info("[run] input=%s output=%s", str(input_p), str(output_file))
 
     # Node 1: Parse document
@@ -370,6 +373,24 @@ def run_atomizer(
         logger.error("[node3] confidence_gate rejected: %s", gate_result.rationale)
         return 1
 
+    # Node 3.5: GRC Component Extraction
+    logger.info("[node3.5] grc_extractor calling Claude...")
+    grc_extractor = GRCComponentExtractorNode()
+    grc_result = grc_extractor(state)
+    grc_components = grc_result.get("grc_components")
+    state["grc_components"] = grc_components
+    state["component_index"] = grc_result.get("component_index", {})
+
+    if grc_components:
+        logger.info(
+            "[node3.5] grc_extractor policies=%s risks=%s controls=%s",
+            len(grc_components.policies),
+            len(grc_components.risks),
+            len(grc_components.controls),
+        )
+    else:
+        logger.warning("[node3.5] grc_extractor returned no components")
+
     # Node 4: Requirement Atomizer
     logger.info("[node4] atomizer calling Claude...")
     atomizer = RequirementAtomizerNode()
@@ -404,6 +425,7 @@ def run_atomizer(
     payload = {
         "requirements": [r.model_dump() for r in requirements],
         "extraction_metadata": extraction_metadata.model_dump() if extraction_metadata else {},
+        "grc_components": grc_components.model_dump() if grc_components else {},
         "eval_report": eval_report,
         "schema_map": schema_map.model_dump(),
         "gate_decision": gate_result.to_dict(),  # CF-8: Structured decision
