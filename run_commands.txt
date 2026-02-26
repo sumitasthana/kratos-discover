@@ -1,5 +1,0 @@
- .\.venv\Scripts\Activate.ps1
-python cli.py atomize --input ""C:\LangChain\Kratos-Code\kratos-discover-agent\kratos-discover\data\FDIC_Part370_IT_Controls_Enriched_330.docx""
-cd c:\LangChain\Kratos-Code\kratos-discover-agent\kratos-discover\dashboard
-powershell -ExecutionPolicy Bypass -File .\sync-outputs.ps1
-npm run dev

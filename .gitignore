@@ -47,3 +47,6 @@ dist/
 *.swp
 *.swo
 *~
+
+# Local command files
+run_commands.txt
