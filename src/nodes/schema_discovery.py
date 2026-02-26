@@ -16,14 +16,18 @@ from models.schema_map import SchemaMap
 from models.state import Phase1State
 from cache.schema_cache import get_cached_schema, cache_schema
 from utils.llm_client import get_anthropic_client
+from utils.error_handler import handle_anthropic_error, APIError
+from config.loader import get_config, get_llm_model, get_llm_max_tokens
 
 logger = structlog.get_logger(__name__)
 
 SCHEMA_DISCOVERY_PROMPTS_DIR = Path(__file__).parent.parent / "prompts" / "schema_discovery"
 
-MAX_CHUNKS_PER_ENTITY_TYPE = 3
-MAX_TOTAL_CHUNKS = 15
-MAX_RETRIES = 3
+# Load configuration
+_config = get_config()
+MAX_CHUNKS_PER_ENTITY_TYPE = _config.get("schema_discovery.max_chunks_per_entity_type", 3)
+MAX_TOTAL_CHUNKS = _config.get("schema_discovery.max_total_chunks", 15)
+MAX_RETRIES = _config.get("schema_discovery.max_retries", 3)
 
 
 def compute_schema_hash(schema_map: SchemaMap) -> str:
@@ -323,7 +327,9 @@ CRITICAL:
 
 def call_claude_structured(prompt: str, output_model: type[BaseModel]) -> BaseModel:
     """Call Claude with structured output."""
+    import time
     client = get_anthropic_client()
+    last_error = None
     
     for attempt in range(MAX_RETRIES):
         try:
@@ -333,13 +339,47 @@ def call_claude_structured(prompt: str, output_model: type[BaseModel]) -> BaseMo
                 messages=[{"role": "user", "content": prompt}],
             )
             
-            content = response.content[0].text if response.content else "{}"
+            # Extract content with better error handling
+            if not response.content:
+                logger.error("claude_empty_response", attempt=attempt, response_obj=str(response))
+                raise ValueError("Claude returned empty response content")
+            
+            content = response.content[0].text
+            if not content or not content.strip():
+                logger.error("claude_empty_text", attempt=attempt, content_length=len(content) if content else 0)
+                raise ValueError(f"Claude returned empty or whitespace-only text: {repr(content)}")
+            
+            logger.debug("claude_response_received", attempt=attempt, content_length=len(content))
             data = json.loads(content)
             return output_model(**data)
-        except Exception as e:
-            logger.warning("claude_call_failed", attempt=attempt, error=str(e))
+        except json.JSONDecodeError as e:
+            content_preview = content[:200] if content else ""
+            logger.warning("claude_json_parse_failed", attempt=attempt, error=str(e), content_preview=content_preview)
+            last_error = e
             if attempt == MAX_RETRIES - 1:
-                raise
+                raise ValueError(f"Failed to parse Claude response as JSON after {MAX_RETRIES} attempts. Last error: {str(e)}. Response preview: {content[:500] if content else 'empty'}")
+            # Exponential backoff before retry
+            wait_time = 2 ** attempt
+            logger.info(f"Retrying in {wait_time} seconds...")
+            time.sleep(wait_time)
+        except Exception as e:
+            # Convert Anthropic SDK exceptions to user-friendly errors
+            api_error = handle_anthropic_error(e)
+            logger.warning(
+                "claude_call_failed",
+                attempt=attempt,
+                error_type=api_error.error_type,
+                message=api_error.message,
+                is_retryable=api_error.is_retryable,
+            )
+            last_error = api_error
+            if attempt == MAX_RETRIES - 1:
+                raise api_error
+            # Exponential backoff before retry
+            wait_time = 2 ** attempt
+            logger.info(f"Retrying in {wait_time} seconds...")
+            time.sleep(wait_time)
+    
     raise RuntimeError("Exhausted retries")
 
 
@@ -381,7 +421,42 @@ def schema_discovery_agent(state: Phase1State) -> dict:
 
     # Build prompt with grounded data and call Claude
     prompt = build_discovery_prompt(sample_chunks, entity_stats, extracted_fields)
-    schema_map = call_claude_structured(prompt, SchemaMap)
+    
+    try:
+        schema_map = call_claude_structured(prompt, SchemaMap)
+    except Exception as e:
+        logger.error("schema_discovery_claude_failed", error=str(e))
+        # Create minimal fallback schema from extracted fields
+        logger.warning("schema_discovery_using_fallback", reason=str(e))
+        from models.schema_map import Entity, Field
+        
+        fallback_entities = []
+        for entity_type in entity_stats.keys():
+            fields = []
+            if entity_type in extracted_fields:
+                for field_name in extracted_fields[entity_type][:5]:  # Limit to 5 fields per entity
+                    fields.append(Field(
+                        field_label=field_name,
+                        field_type="string",
+                        required=False,
+                        description=f"Field: {field_name}"
+                    ))
+            
+            fallback_entities.append(Entity(
+                discovered_label=entity_type,
+                entity_type=entity_type.upper(),
+                fields=fields,
+                confidence=0.5,
+                evidence_count=entity_stats.get(entity_type, 0)
+            ))
+        
+        schema_map = SchemaMap(
+            entities=fallback_entities,
+            relationships=[],
+            structural_pattern="table",
+            confidence=0.5,
+            anomalies=[]
+        )
 
     # Compute derived fields
     schema_map.schema_version = compute_schema_hash(schema_map)

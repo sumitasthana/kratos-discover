@@ -220,6 +220,13 @@ def parse_docx_to_chunks(
             if pending_heading and _ENTITY_HEADING_RE.match(pending_heading) and _STUB_RE.search(txt):
                 annotations["incomplete_record"] = True
                 annotations["incomplete_reason"] = "stub_control_reference_only"
+            
+            # Issue 4: Detect prose fragments (sentences starting with pronouns without antecedents)
+            # These indicate the chunk is missing context from the previous chunk
+            first_sentence = txt.split('.')[0] if txt else ""
+            if first_sentence.strip().lower().startswith(('this ', 'that ', 'these ', 'those ', 'it ', 'they ', 'them ')):
+                annotations["fragment_warning"] = True
+                annotations["fragment_reason"] = "starts_with_pronoun_no_antecedent"
 
             chunks.append(
                 ContentChunk(
@@ -352,7 +359,7 @@ def parse_docx_to_chunks(
 
                     row_count = len(sub_table)
                     col_count = max((len(r) for r in sub_table), default=0)
-                    annotations = _get_base_annotations_from_table(table_data)
+                    annotations = _get_base_annotations_from_table(sub_table)
                     chunks.append(
                         ContentChunk(
                             chunk_id="",

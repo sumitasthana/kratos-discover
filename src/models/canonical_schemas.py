@@ -72,6 +72,21 @@ CANONICAL_SCHEMAS: dict[str, dict] = {
         "optional": ["responsibility", "required_data_elements", "insurance_coverage"],
         "enums": {},
     },
+    "enumeration_constraint": {
+        "required": ["field_name", "permitted_values"],
+        "optional": ["null_permitted", "consequence"],
+        "enums": {},
+    },
+    "referential_integrity": {
+        "required": ["source_field", "target_file"],
+        "optional": ["cardinality", "consequence"],
+        "enums": {},
+    },
+    "control_requirement": {
+        "required": ["control_type", "control_mechanism"],
+        "optional": ["applicable_fields", "data_source", "regulatory_basis", "consequence"],
+        "enums": {},
+    },
 }
 
 LEGACY_MAPPINGS = {

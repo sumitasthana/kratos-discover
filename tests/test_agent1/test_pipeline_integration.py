@@ -5,17 +5,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent1.models.chunks import ContentChunk
-from agent1.models.grc_components import (
+from models.chunks import ContentChunk
+from models.grc_components import (
     ControlComponent,
     GRCComponentsResponse,
     PolicyComponent,
 )
-from agent1.models.requirements import RegulatoryRequirement, RuleMetadata
-from agent1.models.schema_map import DiscoveredEntity, DiscoveredField, SchemaMap
-from agent1.nodes.atomizer.node import RequirementAtomizerNode
-from agent1.nodes.grc_extractor import GRCComponentExtractorNode
-from shared.models import RuleType
+from models.requirements import RegulatoryRequirement, RuleMetadata
+from models.schema_map import DiscoveredEntity, DiscoveredField, SchemaMap
+from nodes.atomizer.node import RequirementAtomizerNode
+from nodes.grc_extractor import GRCComponentExtractorNode
+from models.shared import RuleType
 
 
 def make_test_chunk(
@@ -129,7 +129,7 @@ class TestComponentIdFlowsToRequirements:
         assert requirements[1].parent_component_id == "C-001"
         assert requirements[2].parent_component_id is None
 
-    @patch("agent1.nodes.grc_extractor.get_anthropic_client")
+    @patch("nodes.grc_extractor.get_anthropic_client")
     def test_grc_extractor_builds_component_index(self, mock_get_client):
         """GRC extractor builds component_index correctly."""
         # Mock the Anthropic client

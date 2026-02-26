@@ -85,6 +85,44 @@ rule_types:
         threshold_value: 24
         threshold_unit: "hours"
 
+  control_requirement:
+    description: "A mandatory IT system control with a specified control type (Preventive, Detective, or Corrective) and the data attributes it governs"
+    example:
+      rule_type: "control_requirement"
+      rule_description: "A database-level unique index must be enforced on CS_Unique_ID within the Customer File to prevent duplicate depositor records"
+      grounded_in: "A database-level unique index must be enforced on CS_Unique_ID within the Customer File"
+      confidence: 0.92
+      attributes:
+        control_type: "Preventive"
+        control_mechanism: "database_constraint"
+        applicable_fields: ["CS_Unique_ID"]
+        data_source: "Customer File"
+        regulatory_basis: "12 CFR § 330.5(a)(1)"
+
+  enumeration_constraint:
+    description: "A field must contain one of a fixed set of permitted values"
+    example:
+      rule_type: "enumeration_constraint"
+      rule_description: "DP_Prod_Cat field must contain one of the permitted product category codes: DDA, NOW, MMA, SAV, or CDS"
+      grounded_in: "DP_Prod_Cat must be one of DDA, NOW, MMA, SAV, CDS"
+      confidence: 0.94
+      attributes:
+        field_name: "DP_Prod_Cat"
+        permitted_values: ["DDA", "NOW", "MMA", "SAV", "CDS"]
+        null_permitted: false
+
+  referential_integrity:
+    description: "A record in one file must have a matching record in another file"
+    example:
+      rule_type: "referential_integrity"
+      rule_description: "Every CS_Unique_ID in the Account File must exist in the Customer File"
+      grounded_in: "Each account record must reference a valid customer record via CS_Unique_ID"
+      confidence: 0.91
+      attributes:
+        source_field: "CS_Unique_ID"
+        target_file: "Customer File"
+        cardinality: "many_to_one"
+
 negative_examples:
   - text: "A covered institution means an insured depository institution that has two million or more deposit accounts."
     why_skip: "This is a DEFINITION, not a testable obligation. No action required."
@@ -116,6 +154,30 @@ instructions: |
   6. If text does not contain any testable obligation, return an empty array [].
      Do NOT force-extract definitions, background, or commentary.
 
+  7. Use enumeration_constraint (not data_quality_threshold) when the
+     obligation is that a field must contain one of a fixed set of values.
+     Example: "DP_Prod_Cat must be one of DDA, NOW, MMA, SAV, CDS"
+     → rule_type: enumeration_constraint
+     → attributes: {field_name: "DP_Prod_Cat", permitted_values: ["DDA","NOW","MMA","SAV","CDS"]}
+
+  8. Use referential_integrity (not data_quality_threshold) when the
+     obligation is that a record in one file must have a matching record
+     in another file. Example: "Every CS_Unique_ID in the Account File
+     must exist in the Customer File"
+     → rule_type: referential_integrity
+     → attributes: {source_field: "CS_Unique_ID", target_file: "Customer File"}
+
+  9. Use control_requirement when the source text explicitly labels or
+     describes a system control with Preventive, Detective, or Corrective
+     classification, or when the obligation describes a system enforcement
+     mechanism (constraint, validation rule, audit log, reconciliation check).
+     ALSO use control_requirement for annual/periodic testing obligations,
+     system testing requirements, or control effectiveness testing.
+
+  10. Do NOT extract sentence fragments. A requirement must be a complete
+      testable obligation. If a sentence only makes sense with its preceding
+      sentence as context, combine them into one rule_description.
+
   ANTI-PATTERNS (do NOT extract these as requirements):
   - Definitions: "A covered institution means an IDI with 2M+ deposit accounts" → SKIP
   - Background: "The FDIC was established in 1933" → SKIP
@@ -132,8 +194,10 @@ instructions: |
 
   OUTPUT FORMAT:
   Return a JSON array where each element has these fields:
-  - rule_type: one of data_quality_threshold, ownership_category, beneficial_ownership_threshold, 
-               documentation_requirement, update_requirement, update_timeline
+  - rule_type: one of data_quality_threshold, enumeration_constraint,
+               referential_integrity, ownership_category,
+               beneficial_ownership_threshold, documentation_requirement,
+               update_requirement, update_timeline, control_requirement
   - rule_description: single sentence testable obligation
   - grounded_in: verbatim text from source
   - confidence: float 0.70-0.99 (minimum 0.70 for retry pass)

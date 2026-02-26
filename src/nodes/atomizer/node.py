@@ -24,12 +24,17 @@ from nodes.atomizer.batch_processor import BatchProcessor
 from nodes.atomizer.prompt_builder import PromptBuilder
 from nodes.atomizer.response_parser import ResponseParser
 from nodes.atomizer.schema_repair import SchemaRepairer
+from config.loader import get_config, get_llm_model, get_confidence_thresholds, get_fragment_pronouns
 
 logger = structlog.get_logger(__name__)
 
-# Configuration constants
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
-BATCH_FAILURE_THRESHOLD = 0.50  # Fail if >50% of batches fail
+# Load configuration
+_config = get_config()
+DEFAULT_MODEL = get_llm_model()
+BATCH_FAILURE_THRESHOLD = _config.get("atomizer.failure_handling.batch_failure_threshold", 0.50)
+CONFIDENCE_THRESHOLD_PASS1 = get_confidence_thresholds(iteration=1)
+CONFIDENCE_THRESHOLD_PASS2 = get_confidence_thresholds(iteration=2)
+FRAGMENT_PRONOUNS = tuple(get_fragment_pronouns())
 
 
 class AtomizerFailure(Exception):
@@ -153,7 +158,9 @@ class RequirementAtomizerNode:
                 req.parent_component_id = parent_id
 
         # Validate attributes and adjust confidence
-        validated_requirements = self._validate_and_adjust(all_requirements)
+        validated_requirements, inference_rejected = self._validate_and_adjust(
+            all_requirements, extraction_iteration
+        )
 
         # Build extraction metadata
         extraction_metadata = self._build_metadata(
@@ -166,6 +173,7 @@ class RequirementAtomizerNode:
             total_llm_calls=total_llm_calls,
             total_input_tokens=total_input_tokens,
             total_output_tokens=total_output_tokens,
+            inference_rejected_count=len(inference_rejected),
         )
 
         logger.info(
@@ -205,10 +213,18 @@ class RequirementAtomizerNode:
         }
 
     def _validate_and_adjust(
-        self, requirements: list[RegulatoryRequirement]
-    ) -> list[RegulatoryRequirement]:
-        """Validate attributes and compute feature-based confidence scores."""
+        self, requirements: list[RegulatoryRequirement], extraction_iteration: int = 1
+    ) -> tuple[list[RegulatoryRequirement], list[RegulatoryRequirement]]:
+        """Validate attributes and compute feature-based confidence scores.
+        
+        Returns:
+            Tuple of (validated_requirements, inference_rejected_requirements)
+        """
         validated: list[RegulatoryRequirement] = []
+        inference_rejected: list[RegulatoryRequirement] = []
+        
+        # Determine confidence threshold based on extraction iteration
+        min_threshold = CONFIDENCE_THRESHOLD_PASS2 if extraction_iteration == 2 else CONFIDENCE_THRESHOLD_PASS1
 
         for req in requirements:
             # Post-extraction schema validation with auto-repair
@@ -256,6 +272,40 @@ class RequirementAtomizerNode:
             req.attributes["_grounding_classification"] = confidence_result.grounding_classification
             req.attributes["_grounding_evidence"] = confidence_result.grounding_evidence
 
+            # CHANGE 1: Hard-reject INFERENCE grounded requirements
+            if confidence_result.grounding_classification == "INFERENCE":
+                logger.warning(
+                    "atomizer_inference_rejected",
+                    requirement_id=req.requirement_id,
+                    rule_description=req.rule_description[:100],
+                )
+                inference_rejected.append(req)
+                continue
+
+            # CHANGE 3: Enforce confidence threshold gate
+            if req.confidence < min_threshold:
+                logger.info(
+                    "atomizer_confidence_below_threshold",
+                    requirement_id=req.requirement_id,
+                    confidence=req.confidence,
+                    threshold=min_threshold,
+                    iteration=extraction_iteration,
+                )
+                continue
+
+            # Issue 4: Detect fragments (requirements starting with demonstrative pronouns)
+            # These indicate missing context from previous chunk
+            desc_lower = req.rule_description.lower()
+            if any(desc_lower.startswith(pronoun) for pronoun in FRAGMENT_PRONOUNS):
+                logger.warning(
+                    "atomizer_fragment_detected",
+                    requirement_id=req.requirement_id,
+                    rule_description=req.rule_description[:100],
+                    reason="starts_with_demonstrative_pronoun",
+                )
+                req.attributes["_fragment_warning"] = True
+                req.attributes["_fragment_reason"] = "starts_with_demonstrative_pronoun"
+
             # Replace vague verbs
             verb_result = replace_vague_verbs(req.rule_description, req.attributes)
             if verb_result.has_vague_verbs:
@@ -280,7 +330,7 @@ class RequirementAtomizerNode:
 
             validated.append(req)
 
-        return validated
+        return validated, inference_rejected
 
     def _build_metadata(
         self,
@@ -293,6 +343,7 @@ class RequirementAtomizerNode:
         total_llm_calls: int,
         total_input_tokens: int,
         total_output_tokens: int,
+        inference_rejected_count: int = 0,
     ) -> ExtractionMetadata:
         """Build extraction metadata from results."""
         avg_confidence = 0.0
@@ -317,6 +368,7 @@ class RequirementAtomizerNode:
             total_llm_calls=total_llm_calls,
             total_input_tokens=total_input_tokens,
             total_output_tokens=total_output_tokens,
+            inference_rejected_count=inference_rejected_count,
         )
 
 

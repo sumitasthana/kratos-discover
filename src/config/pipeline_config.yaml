@@ -1,0 +1,150 @@
+# Kratos Discover Agent - Pipeline Configuration
+# Centralized configuration for all pipeline parameters
+
+# ============================================================================
+# LLM Configuration
+# ============================================================================
+llm:
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+  temperature: 0.0
+  temperature_retry: 0.1
+
+# ============================================================================
+# Preprocessing Configuration
+# ============================================================================
+preprocessing:
+  max_chunk_chars: 3000
+  min_chunk_chars: 50
+
+# ============================================================================
+# Schema Discovery Configuration
+# ============================================================================
+schema_discovery:
+  max_chunks_per_entity_type: 3
+  max_total_chunks: 15
+  max_retries: 3
+  retry_backoff_base: 2.0
+
+# ============================================================================
+# GRC Component Extraction Configuration
+# ============================================================================
+grc_extractor:
+  max_retries: 3
+  retry_backoff_base: 2.0
+
+# ============================================================================
+# Confidence Gate Configuration
+# ============================================================================
+confidence_gate:
+  thresholds:
+    grc_export:
+      auto_accept: 0.85
+      human_review: 0.50
+      min_schema_compliance: 0.50
+      min_coverage: 0.60
+    regulatory_docx:
+      auto_accept: 0.80
+      human_review: 0.40
+      min_schema_compliance: 0.50
+      min_coverage: 0.60
+    data_dictionary:
+      auto_accept: 0.90
+      human_review: 0.60
+      min_schema_compliance: 0.70
+      min_coverage: 0.70
+    default:
+      auto_accept: 0.85
+      human_review: 0.50
+      min_schema_compliance: 0.50
+      min_coverage: 0.60
+
+# ============================================================================
+# Requirement Atomizer Configuration
+# ============================================================================
+atomizer:
+  batch_processing:
+    max_batch_chars: 12000
+    max_retries_per_batch: 3
+    retry_backoff_base: 2.0
+  
+  failure_handling:
+    batch_failure_threshold: 0.50
+  
+  confidence_thresholds:
+    pass1: 0.60
+    pass2: 0.70
+  
+  fragment_detection:
+    pronouns:
+      - "this "
+      - "that "
+      - "these "
+      - "those "
+      - "it "
+      - "they "
+      - "them "
+      - "its "
+
+# ============================================================================
+# Confidence Scoring Configuration
+# ============================================================================
+confidence_scoring:
+  feature_weights:
+    grounding_match: 0.35
+    completeness: 0.25
+    quantification: 0.15
+    schema_compliance: 0.10
+    coherence: 0.10
+    domain_signals: 0.05
+  
+  confidence_bounds:
+    min_confidence: 0.0
+    max_confidence: 1.0
+    ceiling_for_inference: 0.70
+
+# ============================================================================
+# Deduplication Configuration
+# ============================================================================
+deduplication:
+  jaccard_similarity_threshold: 0.75
+
+# ============================================================================
+# Insights Generator Configuration
+# ============================================================================
+insights:
+  quality_assessment:
+    excellent_threshold: 90
+    good_threshold: 75
+    fair_threshold: 60
+  
+  hallucination_detection:
+    critical_confidence_threshold: 0.60
+    high_confidence_threshold: 0.70
+    medium_confidence_threshold: 0.80
+    inference_risk_level: medium
+  
+  risk_flags:
+    data_source_coverage_threshold: 80
+    schema_issue_high_threshold: 0.10
+    low_confidence_threshold: 0.65
+
+# ============================================================================
+# Evaluation Configuration
+# ============================================================================
+evaluation:
+  hallucination_detection:
+    enabled: true
+  schema_compliance_check:
+    enabled: true
+  testability_check:
+    enabled: true
+
+# ============================================================================
+# Output Configuration
+# ============================================================================
+output:
+  include_debug_fields: false
+  include_internal_attributes: false
+  pretty_print: true
+  indent: 2
