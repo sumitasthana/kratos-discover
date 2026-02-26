@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import pytest
 
-from agent1.models.schema_map import (
+from models.schema_map import (
     DiscoveredField,
     DiscoveredEntity,
     SchemaMap,
 )
-from agent1.nodes.schema_discovery import (
+from nodes.schema_discovery import (
     compute_schema_hash,
     compute_avg_confidence,
 )
-from agent1.nodes.confidence_gate import check_confidence
-from agent1.models.state import Phase1State
-from agent1.cache.schema_cache import cache_schema, get_cached_schema
+from nodes.confidence_gate import check_confidence
+from models.state import Phase1State
+from cache.schema_cache import cache_schema, get_cached_schema
 
 
 def test_compute_avg_confidence() -> None:
@@ -93,7 +93,7 @@ def test_confidence_gate_accept() -> None:
         "file_path": "test.docx",
     }
     result = check_confidence(state)
-    assert result == "accept"
+    assert result.decision == "accept"
 
 
 def test_confidence_gate_review() -> None:
@@ -122,7 +122,7 @@ def test_confidence_gate_review() -> None:
         "file_path": "test.docx",
     }
     result = check_confidence(state)
-    assert result == "human_review"
+    assert result.decision == "human_review"
 
 
 def test_confidence_gate_reject() -> None:
@@ -151,7 +151,7 @@ def test_confidence_gate_reject() -> None:
         "file_path": "test.docx",
     }
     result = check_confidence(state)
-    assert result == "reject"
+    assert result.decision == "reject"
 
 
 def test_schema_caching() -> None:
@@ -214,7 +214,7 @@ def test_discovered_entity_with_multiple_fields() -> None:
 
 def test_schema_map_with_relationships() -> None:
     """Test SchemaMap with entity relationships."""
-    from agent1.models.schema_map import DiscoveredRelationship
+    from models.schema_map import DiscoveredRelationship
     
     control_entity = DiscoveredEntity(
         discovered_label="Control",

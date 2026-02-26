@@ -22,6 +22,8 @@ class RuleType(str, Enum):
     """Types of regulatory requirements that can be extracted.
     
     - DATA_QUALITY_THRESHOLD: Quantitative standard with measurable metric
+    - ENUMERATION_CONSTRAINT: Field must contain one of a fixed set of values
+    - REFERENTIAL_INTEGRITY: Record in one file must have matching record in another
     - OWNERSHIP_CATEGORY: Account ownership classification
     - BENEFICIAL_OWNERSHIP_THRESHOLD: Numeric trigger for beneficial owners
     - DOCUMENTATION_REQUIREMENT: Required documents/records
@@ -31,6 +33,8 @@ class RuleType(str, Enum):
     - RISK_STATEMENT: Risk-related statements
     """
     DATA_QUALITY_THRESHOLD = "data_quality_threshold"
+    ENUMERATION_CONSTRAINT = "enumeration_constraint"
+    REFERENTIAL_INTEGRITY = "referential_integrity"
     OWNERSHIP_CATEGORY = "ownership_category"
     BENEFICIAL_OWNERSHIP_THRESHOLD = "beneficial_ownership_threshold"
     DOCUMENTATION_REQUIREMENT = "documentation_requirement"
@@ -43,6 +47,8 @@ class RuleType(str, Enum):
 # Type code mapping for requirement ID generation
 RULE_TYPE_CODES: dict[RuleType, str] = {
     RuleType.DATA_QUALITY_THRESHOLD: "DQ",
+    RuleType.ENUMERATION_CONSTRAINT: "EC",
+    RuleType.REFERENTIAL_INTEGRITY: "RI",
     RuleType.OWNERSHIP_CATEGORY: "OWN",
     RuleType.BENEFICIAL_OWNERSHIP_THRESHOLD: "BO",
     RuleType.DOCUMENTATION_REQUIREMENT: "DOC",

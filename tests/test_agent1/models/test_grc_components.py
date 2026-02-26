@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent1.models.grc_components import (
+from models.grc_components import (
     ControlComponent,
     GRCComponentBase,
     GRCComponentsResponse,

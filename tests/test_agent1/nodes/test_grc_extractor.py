@@ -5,15 +5,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent1.models.chunks import ContentChunk
-from agent1.models.grc_components import (
+from models.chunks import ContentChunk
+from models.grc_components import (
     ControlComponent,
     GRCComponentsResponse,
     PolicyComponent,
     RiskComponent,
 )
-from agent1.models.schema_map import DiscoveredEntity, DiscoveredField, SchemaMap
-from agent1.nodes.grc_extractor import GRCComponentExtractorNode
+from models.schema_map import DiscoveredEntity, DiscoveredField, SchemaMap
+from nodes.grc_extractor import GRCComponentExtractorNode
 
 
 def make_test_chunk(
@@ -247,7 +247,7 @@ class TestGRCExtractorNode:
 class TestGRCExtractorIntegration:
     """Integration tests with mocked LLM calls."""
 
-    @patch("agent1.nodes.grc_extractor.get_anthropic_client")
+    @patch("nodes.grc_extractor.get_anthropic_client")
     def test_extract_components_parses_response(self, mock_get_client):
         """LLM response is parsed into components."""
         # Mock the Anthropic client

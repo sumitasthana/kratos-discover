@@ -25,11 +25,31 @@ RULE_ATTRIBUTE_SCHEMAS: dict[str, dict[str, dict]] = {
     "data_quality_threshold": {
         "required": {
             "metric": str,
-            "threshold_value": (int, float),
             "threshold_direction": str,
         },
         "optional": {
+            "threshold_value": (int, float),
             "threshold_unit": str,
+            "consequence": str,
+        },
+    },
+    "enumeration_constraint": {
+        "required": {
+            "field_name": str,
+            "permitted_values": list,
+        },
+        "optional": {
+            "null_permitted": bool,
+            "consequence": str,
+        },
+    },
+    "referential_integrity": {
+        "required": {
+            "source_field": str,
+            "target_file": str,
+        },
+        "optional": {
+            "cardinality": str,
             "consequence": str,
         },
     },
@@ -76,10 +96,23 @@ RULE_ATTRIBUTE_SCHEMAS: dict[str, dict[str, dict]] = {
     "update_timeline": {
         "required": {
             "applies_to": str,
-            "threshold_value": (int, float),
             "threshold_unit": str,
         },
         "optional": {
+            "threshold_value": (int, float),
+            "timeline": str,
+            "consequence": str,
+        },
+    },
+    "control_requirement": {
+        "required": {
+            "control_type": str,
+        },
+        "optional": {
+            "control_mechanism": str,
+            "applicable_fields": list,
+            "data_source": str,
+            "regulatory_basis": str,
             "consequence": str,
         },
     },
@@ -143,6 +176,119 @@ class RegulatoryRequirement(BaseModel):
             return 0.99
         return v
 
+    def to_output_dict(self) -> dict[str, Any]:
+        """
+        Serialize requirement for output JSON, excluding debug internals and normalizing structure.
+        
+        Removes:
+        - Debug fields: _original_description, _actionable_description, _verb_replacements
+        - Schema validation: _schema_validation, _grounding_classification
+        - Grounding evidence sub-fields: description_words, grounded_words, intersection, matched_phrases, phrase_count
+        - Control metadata source fields: evidence_type_source, system_mapping_source, system_mapping_keywords
+        - Metadata fields: extraction_iteration, prompt_version, schema_version
+        - parent_component_id
+        
+        Transforms:
+        - grounded_in → grounding object with jaccard_score and conditional source_text
+        - Promotes fields from _control_metadata to top level
+        - Suppresses system_mapping when source is default_template
+        - Renames exception_threshold → exception_thresholds
+        - Omits null/empty values
+        """
+        output = {
+            "requirement_id": self.requirement_id,
+            "rule_type": self.rule_type.value,
+            "rule_description": self.rule_description,
+            "confidence": round(self.confidence, 2),
+        }
+
+        # Build grounding object
+        grounding: dict[str, Any] = {}
+        if "_grounding_evidence" in self.attributes:
+            evidence = self.attributes["_grounding_evidence"]
+            if isinstance(evidence, dict) and "jaccard_score" in evidence:
+                grounding["jaccard_score"] = evidence["jaccard_score"]
+        
+        # Include source_text only if different from rule_description
+        if self.grounded_in and self.grounded_in != self.rule_description:
+            grounding["source_text"] = self.grounded_in
+        
+        if grounding:
+            output["grounding"] = grounding
+
+        # Add confidence features (diagnostic but non-redundant)
+        if "_confidence_features" in self.attributes:
+            output["confidence_features"] = self.attributes["_confidence_features"]
+
+        # Add confidence rationale
+        if "_confidence_rationale" in self.attributes:
+            output["confidence_rationale"] = self.attributes["_confidence_rationale"]
+
+        # Promote fields from _control_metadata to top level
+        if "_control_metadata" in self.attributes:
+            metadata = self.attributes["_control_metadata"]
+            if isinstance(metadata, dict):
+                # control_objective
+                if "control_objective" in metadata and metadata["control_objective"]:
+                    output["control_objective"] = metadata["control_objective"]
+                
+                # risk_addressed
+                if "risk_addressed" in metadata and metadata["risk_addressed"]:
+                    output["risk_addressed"] = metadata["risk_addressed"]
+                
+                # control_owner
+                if "control_owner" in metadata and metadata["control_owner"]:
+                    output["control_owner"] = metadata["control_owner"]
+                
+                # test_procedure
+                if "test_procedure" in metadata and metadata["test_procedure"]:
+                    output["test_procedure"] = metadata["test_procedure"]
+                
+                # evidence_type
+                if "evidence_type" in metadata and metadata["evidence_type"]:
+                    output["evidence_type"] = metadata["evidence_type"]
+                
+                # system_mapping (suppress if source is default_template)
+                if "system_mapping" in metadata and metadata["system_mapping"]:
+                    if metadata.get("system_mapping_source") != "default_template":
+                        output["system_mapping"] = metadata["system_mapping"]
+                
+                # exception_threshold → exception_thresholds
+                if "exception_threshold" in metadata and metadata["exception_threshold"]:
+                    output["exception_thresholds"] = metadata["exception_threshold"]
+                
+                # automated → automation_level
+                if "automated" in metadata and metadata["automated"]:
+                    output["automation_level"] = metadata["automated"]
+
+        # Add other attributes (excluding debug/internal fields)
+        excluded_keys = {
+            "_original_description",
+            "_actionable_description",
+            "_verb_replacements",
+            "_schema_validation",
+            "_grounding_classification",
+            "_grounding_evidence",
+            "_control_metadata",
+            "_confidence_features",
+            "_confidence_rationale",
+            "_fragment_warning",
+            "_fragment_reason",
+        }
+        
+        for key, value in self.attributes.items():
+            if key not in excluded_keys and value is not None and value != {} and value != []:
+                output[key] = value
+
+        # Add metadata (excluding extraction_iteration, prompt_version, schema_version)
+        metadata_output = {
+            "source_chunk_id": self.metadata.source_chunk_id,
+            "source_location": self.metadata.source_location,
+        }
+        output["metadata"] = metadata_output
+
+        return output
+
 
 class ChunkSkipRecord(BaseModel):
     """Record of a skipped chunk with reason (CF-3)."""
@@ -165,6 +311,7 @@ class ExtractionMetadata(BaseModel):
     total_llm_calls: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
+    inference_rejected_count: int = 0  # Count of requirements rejected due to INFERENCE grounding
 
 
 def validate_requirement_attributes(

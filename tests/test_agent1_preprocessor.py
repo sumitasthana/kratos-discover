@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from agent1.exceptions import EmptyDocumentError
-from agent1.nodes.preprocessor import parse_and_chunk
+from exceptions import EmptyDocumentError
+from nodes.preprocessor import parse_and_chunk
 
 
 def _write_docx(

@@ -17,7 +17,9 @@ from nodes.schema_discovery import schema_discovery_agent
 from nodes.confidence_gate import check_confidence
 from nodes.grc_extractor import GRCComponentExtractorNode
 from nodes.atomizer import RequirementAtomizerNode
+from nodes.insights_generator import generate_insights, insights_to_dict
 from eval.eval_node import eval_quality
+from utils.error_handler import APIError, exit_with_error
 
 
 logger = logging.getLogger(__name__)
@@ -343,12 +345,15 @@ def run_atomizer(
     }
 
     logger.info("[node2] schema_discovery calling Claude...")
-    schema_result = schema_discovery_agent(state)
-    schema_map = schema_result.get("schema_map")
+    try:
+        schema_result = schema_discovery_agent(state)
+        schema_map = schema_result.get("schema_map")
 
-    if schema_map is None:
-        logger.error("[node2] schema_discovery failed")
-        return 1
+        if schema_map is None:
+            logger.error("[node2] schema_discovery failed")
+            return 1
+    except APIError as e:
+        return exit_with_error(e, context="schema_discovery")
 
     logger.info(
         "[node2] schema_discovery entities=%s avg_confidence=%.2f%%",
@@ -421,15 +426,53 @@ def run_atomizer(
         eval_report.get("overall_quality_score", 0) * 100,
     )
 
+    # Build summary block
+    by_rule_type: dict[str, int] = {}
+    automation_breakdown = {"automated": 0, "hybrid": 0, "manual": 0}
+    
+    for req in requirements:
+        # Count by rule type
+        rule_type = req.rule_type.value
+        by_rule_type[rule_type] = by_rule_type.get(rule_type, 0) + 1
+        
+        # Count automation levels
+        if "automation_level" in req.attributes:
+            level = req.attributes["automation_level"]
+            if level in automation_breakdown:
+                automation_breakdown[level] += 1
+    
+    avg_confidence = 0.0
+    if requirements:
+        avg_confidence = sum(r.confidence for r in requirements) / len(requirements)
+    
+    summary = {
+        "total_requirements": len(requirements),
+        "by_rule_type": by_rule_type,
+        "avg_confidence": round(avg_confidence, 3),
+        "automation_breakdown": automation_breakdown,
+    }
+    
+    # Generate insights
+    logger.info("[insights] generating insights from extraction results...")
+    insights_result = generate_insights(
+        requirements=requirements,
+        extraction_metadata=extraction_metadata.model_dump() if extraction_metadata else {},
+        gate_decision=gate_result.to_dict(),
+    )
+    insights = insights_to_dict(insights_result)
+    logger.info(
+        f"[insights] generated: quality_tier={insights['quality_assessment']['overall_quality_tier']}, "
+        f"hallucination_risk={insights.get('hallucination_risk', {}).get('hallucination_pct', 0)}%, "
+        f"risk_flags={len(insights['risk_flags'])}, recommendations={len(insights['recommendations'])}"
+    )
+    
     # Save output
     payload = {
-        "requirements": [r.model_dump() for r in requirements],
         "extraction_metadata": extraction_metadata.model_dump() if extraction_metadata else {},
-        "grc_components": grc_components.model_dump() if grc_components else {},
-        "eval_report": eval_report,
-        "schema_map": schema_map.model_dump(),
         "gate_decision": gate_result.to_dict(),  # CF-8: Structured decision
-        "preprocessor_stats": preprocessor_output.document_stats,
+        "summary": summary,
+        "insights": insights,
+        "requirements": [r.to_output_dict() for r in requirements],
     }
     text = json.dumps(payload, indent=2)
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -487,4 +530,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except APIError as e:
+        raise SystemExit(exit_with_error(e, context="atomizer_pipeline"))
+    except Exception as e:
+        # Catch any unexpected errors and provide context
+        logger.exception("unexpected_error", error=str(e))
+        print(f"\n❌ Unexpected error: {str(e)}", file=sys.stderr)
+        print("\n📋 Please report this issue with the error details above.", file=sys.stderr)
+        raise SystemExit(1)

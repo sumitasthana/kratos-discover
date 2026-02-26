@@ -189,7 +189,70 @@ class SchemaRepairer:
                 attrs["applies_when"] = "on_trigger"
             return True
         
+        elif field == "control_mechanism":
+            # Infer control mechanism from description
+            if "unique" in desc_lower or "index" in desc_lower or "constraint" in desc_lower:
+                attrs["control_mechanism"] = "database_constraint"
+            elif "validation" in desc_lower or "check" in desc_lower:
+                attrs["control_mechanism"] = "validation_rule"
+            elif "audit" in desc_lower or "log" in desc_lower:
+                attrs["control_mechanism"] = "audit_trail"
+            elif "encrypt" in desc_lower:
+                attrs["control_mechanism"] = "encryption"
+            elif "access" in desc_lower or "permission" in desc_lower:
+                attrs["control_mechanism"] = "access_control"
+            elif "reconcil" in desc_lower:
+                attrs["control_mechanism"] = "reconciliation"
+            elif "monitor" in desc_lower or "alert" in desc_lower:
+                attrs["control_mechanism"] = "monitoring"
+            else:
+                attrs["control_mechanism"] = "system_control"
+            return True
+        
+        elif field == "threshold_value":
+            # FIX C: Coerce timeline string to numeric threshold_value
+            # Check if there's a timeline string like "24 hours"
+            timeline = attrs.get("timeline", "")
+            if timeline:
+                numeric_val = self._extract_numeric_from_string(timeline)
+                if numeric_val is not None:
+                    attrs["threshold_value"] = numeric_val
+                    return True
+            # Try to extract from description
+            numeric_val = self._extract_numeric_from_string(desc_lower)
+            if numeric_val is not None:
+                attrs["threshold_value"] = numeric_val
+                return True
+            return False
+        
+        elif field == "control_type":
+            # Infer control type from description
+            if any(kw in desc_lower for kw in ["prevent", "block", "restrict", "enforce", "require"]):
+                attrs["control_type"] = "Preventive"
+            elif any(kw in desc_lower for kw in ["detect", "monitor", "audit", "alert", "identify", "flag"]):
+                attrs["control_type"] = "Detective"
+            elif any(kw in desc_lower for kw in ["correct", "fix", "remediat", "restore", "recover"]):
+                attrs["control_type"] = "Corrective"
+            else:
+                attrs["control_type"] = "Preventive"  # Default
+            return True
+        
         return False
+    
+    def _extract_numeric_from_string(self, text: str) -> int | float | None:
+        """Extract numeric value from a string like '24 hours' or 'within 30 days'."""
+        import re
+        # Match patterns like "24", "24.5", "24 hours", "within 30 days"
+        match = re.search(r'(\d+\.?\d*)\s*(?:hours?|days?|months?|years?|%|percent)?', text.lower())
+        if match:
+            val_str = match.group(1)
+            try:
+                if '.' in val_str:
+                    return float(val_str)
+                return int(val_str)
+            except ValueError:
+                pass
+        return None
 
     def _infer_applicable_fields(self, desc_lower: str) -> list[str] | None:
         """Infer applicable fields from description keywords."""

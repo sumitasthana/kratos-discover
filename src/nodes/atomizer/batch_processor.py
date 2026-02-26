@@ -15,13 +15,15 @@ from models.schema_map import SchemaMap
 from nodes.atomizer.prompt_builder import PromptBuilder
 from nodes.atomizer.response_parser import ResponseParser
 from utils.llm_client import get_anthropic_client
+from config.loader import get_config
 
 logger = structlog.get_logger(__name__)
 
-# Configuration constants
-MAX_BATCH_CHARS = 12000  # Target 80% of context window
-MAX_RETRIES_PER_BATCH = 3
-RETRY_BACKOFF_BASE = 2.0
+# Load configuration
+_config = get_config()
+MAX_BATCH_CHARS = _config.get("atomizer.batch_processing.max_batch_chars", 12000)
+MAX_RETRIES_PER_BATCH = _config.get("atomizer.batch_processing.max_retries_per_batch", 3)
+RETRY_BACKOFF_BASE = _config.get("atomizer.batch_processing.retry_backoff_base", 2.0)
 
 
 class BatchProcessor:

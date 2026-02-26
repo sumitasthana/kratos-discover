@@ -27,13 +27,15 @@ from models.grc_components import (
 from models.schema_map import SchemaMap
 from models.state import Phase1State
 from utils.llm_client import get_anthropic_client
+from config.loader import get_config, get_llm_model
 
 logger = structlog.get_logger(__name__)
 
-# Configuration
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
-MAX_RETRIES = 3
-RETRY_BACKOFF_BASE = 2.0
+# Load configuration
+_config = get_config()
+DEFAULT_MODEL = get_llm_model()
+MAX_RETRIES = _config.get("grc_extractor.max_retries", 3)
+RETRY_BACKOFF_BASE = _config.get("grc_extractor.retry_backoff_base", 2.0)
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts" / "grc_extractor"
 
 
